@@ -1,0 +1,7 @@
+# Not a workspace — pnpm 11 keeps install policy here even for a single package.
+# Build scripts are opt-in; only what the toolchain genuinely needs is allowed.
+#
+# This only affects developing this package. Consumers install the committed
+# dist/ and run no build scripts at all.
+allowBuilds:
+  esbuild: true # tsup, vitest
