@@ -92,7 +92,8 @@ var mutationPlanAckSchema = zod.z.object({
 });
 var syncDiffResponseSchema = zod.z.object({
   serverTreeHash: zod.z.string(),
-  serverNodeCount: zod.z.number().int().nonnegative(),
+  serverBookmarks: zod.z.number().int().nonnegative(),
+  serverFolders: zod.z.number().int().nonnegative(),
   cursor: zod.z.number().int().nonnegative()
 });
 var quotaStateSchema = zod.z.object({
@@ -827,6 +828,25 @@ function buildCleanupReport(input) {
   };
 }
 
+// src/sync/tree-hash.ts
+function treeHash(nodes) {
+  const lines = nodes.map((node) => {
+    const url = node.url === null ? "" : canonicalizeUrl(node.url);
+    return [node.id, node.parentId ?? "", node.title, url, String(node.index)].join("\0");
+  });
+  lines.sort();
+  return sha256Hex(lines.join("\n"));
+}
+function treeSize(nodes) {
+  let bookmarks = 0;
+  let folders = 0;
+  for (const node of nodes) {
+    if (node.url === null) folders += 1;
+    else bookmarks += 1;
+  }
+  return { bookmarks, folders };
+}
+
 exports.CLIENT_HEADER = CLIENT_HEADER;
 exports.IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
 exports.MAX_CHANGES_PER_FLUSH = MAX_CHANGES_PER_FLUSH;
@@ -879,6 +899,8 @@ exports.syncImportResponseSchema = syncImportResponseSchema;
 exports.syncOpKindSchema = syncOpKindSchema;
 exports.syncRejectionSchema = syncRejectionSchema;
 exports.titleEqualsUrl = titleEqualsUrl;
+exports.treeHash = treeHash;
+exports.treeSize = treeSize;
 exports.urlHash = urlHash;
 exports.uuidSchema = uuidSchema;
 //# sourceMappingURL=index.cjs.map

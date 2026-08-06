@@ -84,6 +84,7 @@ export const mutationPlanAckSchema = z.object({
 
 export const syncDiffResponseSchema = z.object({
   serverTreeHash: z.string(),
-  serverNodeCount: z.number().int().nonnegative(),
+  serverBookmarks: z.number().int().nonnegative(),
+  serverFolders: z.number().int().nonnegative(),
   cursor: z.number().int().nonnegative(),
 });

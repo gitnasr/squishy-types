@@ -93,6 +93,7 @@ export interface MutationPlanAck {
 /** Server tree fingerprint vs a fresh `getTree()` — the drift check. */
 export interface SyncDiffResponse {
   serverTreeHash: string;
-  serverNodeCount: number;
+  serverBookmarks: number;
+  serverFolders: number;
   cursor: number;
 }

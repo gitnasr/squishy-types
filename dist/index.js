@@ -90,7 +90,8 @@ var mutationPlanAckSchema = z.object({
 });
 var syncDiffResponseSchema = z.object({
   serverTreeHash: z.string(),
-  serverNodeCount: z.number().int().nonnegative(),
+  serverBookmarks: z.number().int().nonnegative(),
+  serverFolders: z.number().int().nonnegative(),
   cursor: z.number().int().nonnegative()
 });
 var quotaStateSchema = z.object({
@@ -825,6 +826,25 @@ function buildCleanupReport(input) {
   };
 }
 
-export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, urlHash, uuidSchema };
+// src/sync/tree-hash.ts
+function treeHash(nodes) {
+  const lines = nodes.map((node) => {
+    const url = node.url === null ? "" : canonicalizeUrl(node.url);
+    return [node.id, node.parentId ?? "", node.title, url, String(node.index)].join("\0");
+  });
+  lines.sort();
+  return sha256Hex(lines.join("\n"));
+}
+function treeSize(nodes) {
+  let bookmarks = 0;
+  let folders = 0;
+  for (const node of nodes) {
+    if (node.url === null) folders += 1;
+    else bookmarks += 1;
+  }
+  return { bookmarks, folders };
+}
+
+export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

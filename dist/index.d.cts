@@ -171,7 +171,8 @@ interface MutationPlanAck {
 /** Server tree fingerprint vs a fresh `getTree()` — the drift check. */
 interface SyncDiffResponse {
     serverTreeHash: string;
-    serverNodeCount: number;
+    serverBookmarks: number;
+    serverFolders: number;
     cursor: number;
 }
 
@@ -548,7 +549,8 @@ declare const mutationPlanAckSchema: z.ZodObject<{
 }, z.core.$strip>;
 declare const syncDiffResponseSchema: z.ZodObject<{
     serverTreeHash: z.ZodString;
-    serverNodeCount: z.ZodNumber;
+    serverBookmarks: z.ZodNumber;
+    serverFolders: z.ZodNumber;
     cursor: z.ZodNumber;
 }, z.core.$strip>;
 
@@ -723,6 +725,35 @@ declare function titleEqualsUrl(title: string, url: string): boolean;
 declare function editDistance(a: string, b: string, max?: number): number;
 
 /**
+ * Fingerprints a bookmark tree so the extension and the server can compare
+ * theirs without shipping the whole thing.
+ *
+ * This function is the drift check. Both sides must compute it identically, so
+ * it lives here rather than being written twice — two implementations that
+ * disagree would report drift that does not exist, and the alert on
+ * `squishy_mirror_drift_total` would cry wolf until nobody trusted it.
+ *
+ * What is included is deliberately narrow: identity, position and the fields a
+ * user can see. Timestamps are excluded because the server rewrites
+ * `updated_at` on every touch, and a hash that changes when nothing the user
+ * did changed is worse than no hash.
+ *
+ * URLs are canonicalised first. The server stores the canonical form, so
+ * hashing the raw one here would report drift on every bookmark with a
+ * tracking parameter.
+ */
+declare function treeHash(nodes: FlatNode[]): string;
+/**
+ * Counts what the hash covers, so a mismatch can say whether the trees differ
+ * in size or only in content. "3,000 vs 3,000 but different" and "3,000 vs
+ * 2,998" point at very different bugs.
+ */
+declare function treeSize(nodes: FlatNode[]): {
+    bookmarks: number;
+    folders: number;
+};
+
+/**
  * Wire protocol version.
  *
  * Extension users sit on stale builds for weeks, so the version travels in a
@@ -737,4 +768,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
