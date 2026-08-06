@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        # Includes src/types/assertions.ts, which pins every wire contract to
+        # its Zod schema. A schema edited without its type fails here.
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: dist/ must match src/
+        # Consumers install this package straight from git and get the
+        # committed dist/. If it is stale they silently receive last version's
+        # code, which is far worse than a failed build.
+        run: |
+          pnpm build
+          if [ -n "$(git status --porcelain dist)" ]; then
+            echo "::error::dist/ is out of date — run 'pnpm build' and commit the result"
+            git --no-pager diff --stat dist
+            exit 1
+          fi
+          echo "dist/ is current"

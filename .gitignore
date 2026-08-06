@@ -1,5 +1,10 @@
 node_modules/
-dist/
 coverage/
+
+# dist/ is deliberately committed. Consumers install this package straight from
+# git, and a `prepare` script that builds on install forces every consumer to
+# allowlist it in pnpm — keyed by a commit-pinned URL that changes with every
+# version bump. Shipping the build instead makes installs hermetic and fast.
+# CI fails if dist/ is stale, so it cannot silently drift.
 *.tsbuildinfo
 .DS_Store

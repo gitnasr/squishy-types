@@ -1,0 +1,906 @@
+'use strict';
+
+var zod = require('zod');
+
+// src/schemas/common.ts
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var uuidSchema = zod.z.string().regex(UUID_RE, "must be a UUID");
+var isoDateTimeSchema = zod.z.string().min(1);
+var epochMsSchema = zod.z.number().int().nonnegative();
+var planSchema = zod.z.enum(["free", "pro"]);
+var keySourceSchema = zod.z.enum(["platform", "byok"]);
+var clientKindSchema = zod.z.enum(["extension", "web"]);
+var jsonObjectSchema = zod.z.record(zod.z.string(), zod.z.unknown());
+var bookmarkStatusSchema = zod.z.enum(["active", "dead", "archived", "deleted"]);
+var contentStateSchema = zod.z.enum(["pending", "client", "scraped", "failed"]);
+var folderOriginSchema = zod.z.enum(["user", "sqishy"]);
+var flatNodeSchema = zod.z.object({
+  id: zod.z.string().min(1).max(128),
+  parentId: zod.z.string().min(1).max(128).nullable(),
+  title: zod.z.string().max(2048),
+  url: zod.z.string().max(4096).nullable(),
+  dateAdded: epochMsSchema.nullable(),
+  depth: zod.z.number().int().min(0).max(64),
+  index: zod.z.number().int().min(0)
+});
+var IMPORT_BATCH_SIZE = 500;
+var MAX_CHANGES_PER_FLUSH = 1e3;
+var syncOpKindSchema = zod.z.enum(["create", "update", "move", "remove", "reorder"]);
+var syncChangeSchema = zod.z.object({
+  localSeq: zod.z.number().int().nonnegative(),
+  kind: syncOpKindSchema,
+  chromeId: zod.z.string().min(1).max(128),
+  parentId: zod.z.string().min(1).max(128).nullable(),
+  index: zod.z.number().int().min(0).nullable(),
+  title: zod.z.string().max(2048).nullable(),
+  url: zod.z.string().max(4096).nullable(),
+  dateAdded: epochMsSchema.nullable(),
+  occurredAt: epochMsSchema
+});
+var syncImportRequestSchema = zod.z.object({
+  deviceId: uuidSchema.nullable(),
+  deviceLabel: zod.z.string().min(1).max(120),
+  batchIndex: zod.z.number().int().min(0),
+  batchCount: zod.z.number().int().min(1),
+  nodes: zod.z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE)
+});
+var syncImportResponseSchema = zod.z.object({
+  deviceId: uuidSchema,
+  accepted: zod.z.number().int().nonnegative(),
+  deduped: zod.z.number().int().nonnegative(),
+  cursor: zod.z.number().int().nonnegative()
+});
+var syncChangesRequestSchema = zod.z.object({
+  deviceId: uuidSchema,
+  cursor: zod.z.number().int().nonnegative(),
+  changes: zod.z.array(syncChangeSchema).max(MAX_CHANGES_PER_FLUSH)
+});
+var syncRejectionSchema = zod.z.object({
+  localSeq: zod.z.number().int().nonnegative(),
+  reason: zod.z.string()
+});
+var mutationOpKindSchema = zod.z.enum(["move", "rename", "create_folder", "remove"]);
+var mutationOpSchema = zod.z.object({
+  opId: uuidSchema,
+  kind: mutationOpKindSchema,
+  chromeId: zod.z.string().min(1).max(128).nullable(),
+  targetParentChromeId: zod.z.string().min(1).max(128).nullable(),
+  index: zod.z.number().int().min(0).nullable(),
+  title: zod.z.string().max(2048).nullable()
+});
+var mutationPlanSchema = zod.z.object({
+  planId: uuidSchema,
+  proposalId: uuidSchema,
+  createdAt: isoDateTimeSchema,
+  ops: zod.z.array(mutationOpSchema)
+});
+var syncChangesResponseSchema = zod.z.object({
+  cursor: zod.z.number().int().nonnegative(),
+  applied: zod.z.number().int().nonnegative(),
+  rejected: zod.z.array(syncRejectionSchema),
+  plans: zod.z.array(mutationPlanSchema)
+});
+var mutationOpResultSchema = zod.z.object({
+  opId: uuidSchema,
+  ok: zod.z.boolean(),
+  error: zod.z.string().optional(),
+  newChromeId: zod.z.string().max(128).optional()
+});
+var mutationPlanAckSchema = zod.z.object({
+  planId: uuidSchema,
+  results: zod.z.array(mutationOpResultSchema)
+});
+var syncDiffResponseSchema = zod.z.object({
+  serverTreeHash: zod.z.string(),
+  serverNodeCount: zod.z.number().int().nonnegative(),
+  cursor: zod.z.number().int().nonnegative()
+});
+var quotaStateSchema = zod.z.object({
+  period: zod.z.string(),
+  limit: zod.z.number().int().nonnegative(),
+  used: zod.z.number().int().nonnegative(),
+  remaining: zod.z.number().int().nonnegative(),
+  keySource: keySourceSchema
+});
+var meResponseSchema = zod.z.object({
+  userId: uuidSchema,
+  email: zod.z.string().email(),
+  displayName: zod.z.string().nullable(),
+  avatarUrl: zod.z.string().nullable(),
+  plan: planSchema,
+  byokEnabled: zod.z.boolean(),
+  quota: quotaStateSchema
+});
+var authGoogleRequestSchema = zod.z.object({
+  idToken: zod.z.string().min(1).max(8192),
+  client: clientKindSchema,
+  deviceLabel: zod.z.string().min(1).max(120).optional()
+});
+var authTokensSchema = zod.z.object({
+  accessToken: zod.z.string(),
+  refreshToken: zod.z.string(),
+  expiresIn: zod.z.number().int().positive()
+});
+var authResponseSchema = zod.z.object({
+  tokens: authTokensSchema,
+  user: meResponseSchema
+});
+var refreshRequestSchema = zod.z.object({
+  refreshToken: zod.z.string().min(1)
+});
+var apiErrorSchema = zod.z.object({
+  statusCode: zod.z.number().int(),
+  error: zod.z.string(),
+  message: zod.z.string(),
+  minProtocolVersion: zod.z.number().int().optional()
+});
+var proposalKindSchema = zod.z.enum(["categorize", "dedupe", "merge_folder", "dead_link"]);
+var proposalStatusSchema = zod.z.enum([
+  "pending",
+  "approved",
+  "rejected",
+  "applied",
+  "expired"
+]);
+var proposalItemOpSchema = zod.z.enum([
+  "move",
+  "rename",
+  "delete",
+  "create_folder",
+  "merge"
+]);
+var proposalItemSchema = zod.z.object({
+  id: uuidSchema,
+  proposalId: uuidSchema,
+  bookmarkId: uuidSchema.nullable(),
+  folderId: uuidSchema.nullable(),
+  op: proposalItemOpSchema,
+  before: jsonObjectSchema,
+  after: jsonObjectSchema
+});
+var proposalSchema = zod.z.object({
+  id: uuidSchema,
+  userId: uuidSchema,
+  kind: proposalKindSchema,
+  status: proposalStatusSchema,
+  confidence: zod.z.number().min(0).max(1),
+  rationale: zod.z.string(),
+  batchId: uuidSchema,
+  itemCount: zod.z.number().int().nonnegative(),
+  createdAt: isoDateTimeSchema,
+  items: zod.z.array(proposalItemSchema).optional()
+});
+var proposalBulkApproveRequestSchema = zod.z.object({
+  proposalIds: zod.z.array(uuidSchema).min(1).max(1e3),
+  overrides: zod.z.record(uuidSchema, zod.z.string()).optional()
+});
+var proposalDecisionResponseSchema = zod.z.object({
+  approved: zod.z.number().int().nonnegative(),
+  rejected: zod.z.number().int().nonnegative(),
+  planIds: zod.z.array(uuidSchema)
+});
+
+// src/url/sha256.ts
+var K = new Uint32Array([
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+]);
+var HEX = "0123456789abcdef";
+function rotr(x, n) {
+  return x >>> n | x << 32 - n;
+}
+function sha256Hex(input) {
+  const data = new TextEncoder().encode(input);
+  const bitLenHi = Math.floor(data.length * 8 / 4294967296);
+  const bitLenLo = data.length * 8 >>> 0;
+  const paddedLen = data.length + 9 + 63 >> 6 << 6;
+  const buf = new Uint8Array(paddedLen);
+  buf.set(data);
+  buf[data.length] = 128;
+  const view = new DataView(buf.buffer);
+  view.setUint32(paddedLen - 8, bitLenHi, false);
+  view.setUint32(paddedLen - 4, bitLenLo, false);
+  const h = new Uint32Array([
+    1779033703,
+    3144134277,
+    1013904242,
+    2773480762,
+    1359893119,
+    2600822924,
+    528734635,
+    1541459225
+  ]);
+  const w = new Uint32Array(64);
+  for (let offset = 0; offset < paddedLen; offset += 64) {
+    for (let i = 0; i < 16; i++) {
+      w[i] = view.getUint32(offset + i * 4, false);
+    }
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15];
+      const y = w[i - 2];
+      const s0 = rotr(x, 7) ^ rotr(x, 18) ^ x >>> 3;
+      const s1 = rotr(y, 17) ^ rotr(y, 19) ^ y >>> 10;
+      w[i] = w[i - 16] + s0 + w[i - 7] + s1 >>> 0;
+    }
+    let a = h[0];
+    let b = h[1];
+    let c = h[2];
+    let d = h[3];
+    let e = h[4];
+    let f = h[5];
+    let g = h[6];
+    let hh = h[7];
+    for (let i = 0; i < 64; i++) {
+      const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = e & f ^ ~e & g;
+      const temp1 = hh + s1 + ch + K[i] + w[i] >>> 0;
+      const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const temp2 = s0 + maj >>> 0;
+      hh = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    h[0] = h[0] + a >>> 0;
+    h[1] = h[1] + b >>> 0;
+    h[2] = h[2] + c >>> 0;
+    h[3] = h[3] + d >>> 0;
+    h[4] = h[4] + e >>> 0;
+    h[5] = h[5] + f >>> 0;
+    h[6] = h[6] + g >>> 0;
+    h[7] = h[7] + hh >>> 0;
+  }
+  let out = "";
+  for (let i = 0; i < 8; i++) {
+    const word = h[i];
+    for (let shift = 28; shift >= 0; shift -= 4) {
+      out += HEX[word >>> shift & 15];
+    }
+  }
+  return out;
+}
+
+// src/url/canonical.ts
+var TRACKING_PARAMS = /* @__PURE__ */ new Set([
+  "gclid",
+  "gclsrc",
+  "gbraid",
+  "wbraid",
+  "dclid",
+  "fbclid",
+  "msclkid",
+  "yclid",
+  "twclid",
+  "ttclid",
+  "igshid",
+  "igsh",
+  "si",
+  "spm",
+  "scm",
+  "ref_src",
+  "ref_url",
+  "mkt_tok",
+  "trk",
+  "ncid",
+  "cmpid",
+  "icid",
+  "epik",
+  "s_kwcid",
+  "li_fat_id",
+  "oly_enc_id",
+  "oly_anon_id",
+  "_ga",
+  "_gl",
+  "_hsenc",
+  "_hsmi",
+  "wt_mc",
+  "at_medium",
+  "at_campaign",
+  "campaignid",
+  "adgroupid",
+  "sc_cid",
+  "source"
+]);
+var TRACKING_PREFIXES = ["utm_", "pk_", "piwik_", "mc_", "vero_", "hsa_", "ga_"];
+var STRIPPABLE_SUBDOMAINS = ["www.", "m.", "mobile."];
+var DEFAULT_PORTS = { "http:": "80", "https:": "443" };
+function isTrackingParam(key) {
+  const lower = key.toLowerCase();
+  if (TRACKING_PARAMS.has(lower)) return true;
+  return TRACKING_PREFIXES.some((prefix) => lower.startsWith(prefix));
+}
+function stripSubdomain(hostname) {
+  const lower = hostname.toLowerCase();
+  for (const prefix of STRIPPABLE_SUBDOMAINS) {
+    if (lower.startsWith(prefix) && lower.length > prefix.length) {
+      return lower.slice(prefix.length);
+    }
+  }
+  return lower;
+}
+function canonicalizeUrl(raw) {
+  const trimmed = raw.trim();
+  if (trimmed === "") return "";
+  let url;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return trimmed;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return trimmed;
+  }
+  const host = stripSubdomain(url.hostname);
+  const port = url.port && url.port !== DEFAULT_PORTS[url.protocol] ? `:${url.port}` : "";
+  const params = [];
+  url.searchParams.forEach((value, key) => {
+    if (!isTrackingParam(key)) params.push([key, value]);
+  });
+  params.sort((a, b) => a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0]));
+  const search = params.length > 0 ? `?${params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&")}` : "";
+  let path = url.pathname;
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  if (path === "/") path = "";
+  return `https://${host}${port}${path}${search}`;
+}
+function urlHash(raw) {
+  return sha256Hex(canonicalizeUrl(raw));
+}
+function pathTokens(pathname) {
+  return pathname.toLowerCase().split(/[/\-_.]+/).map((token) => token.trim()).filter((token) => token.length > 1 && !/^\d+$/.test(token));
+}
+function parseUrl(raw) {
+  const canonical = canonicalizeUrl(raw);
+  let host = "";
+  let tokens = [];
+  try {
+    const url = new URL(canonical);
+    host = url.hostname;
+    tokens = pathTokens(url.pathname);
+  } catch {
+    host = "";
+  }
+  return {
+    original: raw,
+    canonical,
+    hash: sha256Hex(canonical),
+    host,
+    domain: stripSubdomain(host),
+    pathTokens: tokens
+  };
+}
+
+// src/report/flatten.ts
+function unwrapRoots(nodes) {
+  if (nodes.length !== 1) return nodes;
+  const root = nodes[0];
+  if (!root) return nodes;
+  const isSynthetic = root.url === void 0 && root.title === "" && Array.isArray(root.children);
+  return isSynthetic ? root.children ?? [] : nodes;
+}
+function flattenTree(nodes, unwrap = true) {
+  const out = [];
+  const roots = unwrap ? unwrapRoots(nodes) : nodes;
+  const walk = (node, parentId, depth, index) => {
+    out.push({
+      id: node.id,
+      parentId,
+      title: node.title ?? "",
+      url: node.url ?? null,
+      dateAdded: node.dateAdded ?? null,
+      depth,
+      index: node.index ?? index
+    });
+    const children = node.children ?? [];
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      if (child) walk(child, node.id, depth + 1, i);
+    }
+  };
+  for (let i = 0; i < roots.length; i++) {
+    const root = roots[i];
+    if (root) walk(root, null, 0, i);
+  }
+  return out;
+}
+
+// src/protocol.ts
+var PROTOCOL_VERSION = 1;
+var MIN_SUPPORTED_PROTOCOL = 1;
+var PROTOCOL_HEADER = "x-squishy-protocol";
+var CLIENT_HEADER = "x-squishy-client";
+function isProtocolSupported(version) {
+  return Number.isInteger(version) && version >= MIN_SUPPORTED_PROTOCOL && version <= PROTOCOL_VERSION;
+}
+
+// src/report/naming.ts
+var FILLER_TOKENS = /* @__PURE__ */ new Set([
+  "stuff",
+  "misc",
+  "miscellaneous",
+  "things",
+  "random",
+  "other",
+  "others",
+  "new",
+  "folder",
+  "my",
+  "saved",
+  "bookmarks",
+  "bookmark",
+  "links",
+  "link",
+  "general",
+  "various",
+  "assorted",
+  // Conjunctions and articles. `&` expands to `and`, so this must include it or
+  // "Design & UI" and "UI / Design" stop matching.
+  "and",
+  "or",
+  "the",
+  "a",
+  "an",
+  "of",
+  "for",
+  "to",
+  "in",
+  "on",
+  "with"
+]);
+var ALIASES = {
+  javascript: "js",
+  ecmascript: "js",
+  typescript: "ts",
+  python: "py",
+  golang: "go",
+  kubernetes: "k8s",
+  postgresql: "postgres",
+  psql: "postgres",
+  documentation: "docs",
+  doc: "docs",
+  reference: "docs",
+  tutorials: "tutorial",
+  articles: "article",
+  tools: "tool",
+  utilities: "tool",
+  utils: "tool",
+  jobs: "job",
+  career: "job",
+  careers: "job",
+  design: "design",
+  ui: "design",
+  ux: "design"
+};
+var VAGUE_TITLES = /* @__PURE__ */ new Set([
+  "untitled",
+  "new tab",
+  "read later",
+  "read it later",
+  "later",
+  "todo",
+  "to do",
+  "to-do",
+  "stuff",
+  "misc",
+  "temp",
+  "tmp",
+  "test",
+  "link",
+  "page",
+  "document",
+  "bookmark",
+  "home",
+  "index",
+  "(no title)",
+  "no title",
+  "unknown",
+  "loading",
+  "error",
+  "..."
+]);
+function normalizeFolderName(title) {
+  const tokens = title.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter((token) => token.length > 0 && !FILLER_TOKENS.has(token)).map((token) => ALIASES[token] ?? token);
+  const unique = [...new Set(tokens)].sort();
+  return unique.join(" ");
+}
+function isUntitled(title) {
+  return title.trim() === "";
+}
+function isVagueTitle(title, url) {
+  const trimmed = title.trim();
+  if (trimmed === "") return false;
+  const lower = trimmed.toLowerCase();
+  if (VAGUE_TITLES.has(lower)) return true;
+  if (trimmed.length <= 2) return true;
+  if (lower === url.toLowerCase()) return true;
+  return /^https?:\/\//i.test(trimmed);
+}
+function titleEqualsUrl(title, url) {
+  const t = title.trim().toLowerCase().replace(/\/$/, "");
+  const u = url.trim().toLowerCase().replace(/\/$/, "");
+  if (t === "") return false;
+  return t === u || t === u.replace(/^https?:\/\//, "");
+}
+function editDistance(a, b, max = 2) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  let curr = new Array(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const value = Math.min(
+        curr[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost
+      );
+      curr[j] = value;
+      if (value < rowMin) rowMin = value;
+    }
+    if (rowMin > max) return max + 1;
+    const swap = prev;
+    prev = curr;
+    curr = swap;
+  }
+  return prev[b.length];
+}
+
+// src/report/engine.ts
+var YEAR_MS = 365 * 24 * 60 * 60 * 1e3;
+var DEEP_NESTING_THRESHOLD = 4;
+var DUMPING_GROUND_MIN_ITEMS = 20;
+var DUMPING_GROUND_MIN_SHARE = 0.25;
+var MAX_SAMPLES = 10;
+var MAX_GROUPS = 200;
+function buildPath(node, byId) {
+  const parts = [];
+  let current = node;
+  const seen = /* @__PURE__ */ new Set();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    parts.unshift(current.title || "(untitled)");
+    current = current.parentId ? byId.get(current.parentId) : void 0;
+  }
+  return `/${parts.join("/")}`;
+}
+function pickSurvivor(nodes) {
+  let best = nodes[0];
+  for (const node of nodes) {
+    const bestDate = best.dateAdded ?? Number.MAX_SAFE_INTEGER;
+    const nodeDate = node.dateAdded ?? Number.MAX_SAFE_INTEGER;
+    if (nodeDate < bestDate) {
+      best = node;
+    } else if (nodeDate === bestDate && node.title.length > best.title.length) {
+      best = node;
+    }
+  }
+  return best.id;
+}
+function groupDuplicates(bookmarks, keyOf, kind) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const node of bookmarks) {
+    const key = keyOf(node);
+    if (key === "") continue;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(node);
+    else buckets.set(key, [node]);
+  }
+  const groups = [];
+  for (const [key, nodes] of buckets) {
+    if (nodes.length < 2) continue;
+    groups.push({
+      key,
+      kind,
+      url: nodes[0].url ?? "",
+      nodeIds: nodes.map((n) => n.id),
+      keepNodeId: pickSurvivor(nodes),
+      count: nodes.length
+    });
+  }
+  groups.sort((a, b) => b.count - a.count);
+  return groups.slice(0, MAX_GROUPS);
+}
+function groupSimilarFolders(folders) {
+  const byNormalized = /* @__PURE__ */ new Map();
+  for (const folder of folders) {
+    const key = normalizeFolderName(folder.title);
+    if (key === "") continue;
+    const bucket = byNormalized.get(key);
+    if (bucket) bucket.push(folder);
+    else byNormalized.set(key, [folder]);
+  }
+  const keys = [...byNormalized.keys()];
+  const mergedInto = /* @__PURE__ */ new Map();
+  for (let i = 0; i < keys.length; i++) {
+    const a = keys[i];
+    if (mergedInto.has(a)) continue;
+    for (let j = i + 1; j < keys.length; j++) {
+      const b = keys[j];
+      if (mergedInto.has(b)) continue;
+      if (a.length < 4 || b.length < 4) continue;
+      if (editDistance(a, b, 1) <= 1) mergedInto.set(b, a);
+    }
+  }
+  const merged = /* @__PURE__ */ new Map();
+  for (const [key, list] of byNormalized) {
+    const target = mergedInto.get(key) ?? key;
+    const bucket = merged.get(target);
+    if (bucket) bucket.push(...list);
+    else merged.set(target, [...list]);
+  }
+  const groups = [];
+  for (const [normalized, list] of merged) {
+    if (list.length < 2) continue;
+    groups.push({ normalized, folders: list });
+  }
+  groups.sort((a, b) => b.folders.length - a.folders.length);
+  return groups.slice(0, MAX_GROUPS);
+}
+function buildCleanupReport(input) {
+  const now = input.now ?? Date.now();
+  const nodes = input.nodes;
+  const byId = /* @__PURE__ */ new Map();
+  for (const node of nodes) byId.set(node.id, node);
+  const bookmarks = [];
+  const folderNodes = [];
+  for (const node of nodes) {
+    if (node.url === null) folderNodes.push(node);
+    else bookmarks.push(node);
+  }
+  const directBookmarks = /* @__PURE__ */ new Map();
+  const directFolders = /* @__PURE__ */ new Map();
+  for (const node of nodes) {
+    if (node.parentId === null) continue;
+    const target = node.url === null ? directFolders : directBookmarks;
+    target.set(node.parentId, (target.get(node.parentId) ?? 0) + 1);
+  }
+  const folderSummaries = folderNodes.map((folder) => ({
+    id: folder.id,
+    title: folder.title,
+    path: buildPath(folder, byId),
+    depth: folder.depth,
+    bookmarkCount: directBookmarks.get(folder.id) ?? 0,
+    childFolderCount: directFolders.get(folder.id) ?? 0
+  }));
+  const empty = folderSummaries.filter((f) => f.bookmarkCount === 0 && f.childFolderCount === 0);
+  const singleItem = folderSummaries.filter((f) => f.bookmarkCount + f.childFolderCount === 1);
+  const deeplyNested = folderSummaries.filter((f) => f.depth > DEEP_NESTING_THRESHOLD);
+  const similarNames = groupSimilarFolders(folderSummaries);
+  let dumpingGround = null;
+  for (const folder of folderSummaries) {
+    if (folder.depth > 1) continue;
+    if (folder.bookmarkCount < DUMPING_GROUND_MIN_ITEMS) continue;
+    if (folder.bookmarkCount < bookmarks.length * DUMPING_GROUND_MIN_SHARE) continue;
+    if (!dumpingGround || folder.bookmarkCount > dumpingGround.bookmarkCount) {
+      dumpingGround = folder;
+    }
+  }
+  const exactGroups = groupDuplicates(bookmarks, (n) => (n.url ?? "").trim(), "exact");
+  const canonicalGroups = groupDuplicates(bookmarks, (n) => n.url ? urlHash(n.url) : "", "canonical");
+  const wastedEntries = canonicalGroups.reduce((sum, group) => sum + group.count - 1, 0);
+  let untitled = 0;
+  let vague = 0;
+  let sameAsUrl = 0;
+  const samples = [];
+  for (const node of bookmarks) {
+    const url = node.url ?? "";
+    if (isUntitled(node.title)) {
+      untitled += 1;
+    } else if (isVagueTitle(node.title, url)) {
+      vague += 1;
+    }
+    if (titleEqualsUrl(node.title, url)) sameAsUrl += 1;
+    if (samples.length < MAX_SAMPLES && (isUntitled(node.title) || isVagueTitle(node.title, url))) {
+      samples.push({ id: node.id, title: node.title, url });
+    }
+  }
+  let oldest = null;
+  let newest = null;
+  let olderThan1Year = 0;
+  let olderThan3Years = 0;
+  let olderThan5Years = 0;
+  let undated = 0;
+  for (const node of bookmarks) {
+    const added = node.dateAdded;
+    if (added === null) {
+      undated += 1;
+      continue;
+    }
+    if (oldest === null || added < oldest) oldest = added;
+    if (newest === null || added > newest) newest = added;
+    const age = now - added;
+    if (age > YEAR_MS) olderThan1Year += 1;
+    if (age > YEAR_MS * 3) olderThan3Years += 1;
+    if (age > YEAR_MS * 5) olderThan5Years += 1;
+  }
+  const historyAvailable = Array.isArray(input.history);
+  let neverRevisited = 0;
+  let notVisitedIn1Year = 0;
+  if (historyAvailable) {
+    const visits = /* @__PURE__ */ new Map();
+    for (const stat of input.history ?? []) {
+      const key = canonicalizeUrl(stat.url);
+      const existing = visits.get(key);
+      if (existing) {
+        existing.visitCount += stat.visitCount;
+        if ((stat.lastVisitAt ?? 0) > (existing.lastVisitAt ?? 0)) existing.lastVisitAt = stat.lastVisitAt;
+      } else {
+        visits.set(key, { visitCount: stat.visitCount, lastVisitAt: stat.lastVisitAt });
+      }
+    }
+    for (const node of bookmarks) {
+      const stat = visits.get(canonicalizeUrl(node.url ?? ""));
+      if (!stat || stat.visitCount <= 1) neverRevisited += 1;
+      if (!stat || stat.lastVisitAt === null || now - stat.lastVisitAt > YEAR_MS) notVisitedIn1Year += 1;
+    }
+  }
+  const similarNameSurplus = similarNames.reduce((sum, group) => sum + group.folders.length - 1, 0);
+  const issueCount = wastedEntries + empty.length + singleItem.length + deeplyNested.length + similarNameSurplus + untitled + vague;
+  return {
+    generatedAt: now,
+    protocolVersion: PROTOCOL_VERSION,
+    totals: {
+      bookmarks: bookmarks.length,
+      folders: folderNodes.length,
+      maxDepth: nodes.reduce((max, node) => Math.max(max, node.depth), 0),
+      topLevelBookmarks: bookmarks.filter((node) => node.depth <= 1).length,
+      averageFolderSize: folderNodes.length === 0 ? 0 : bookmarks.length / folderNodes.length
+    },
+    duplicates: {
+      exactGroups,
+      canonicalGroups,
+      exactCount: exactGroups.length,
+      canonicalCount: canonicalGroups.length,
+      wastedEntries
+    },
+    folders: {
+      total: folderNodes.length,
+      empty,
+      singleItem,
+      deeplyNested,
+      similarNames,
+      dumpingGround
+    },
+    naming: { untitled, vague, titleEqualsUrl: sameAsUrl, samples },
+    age: {
+      oldestAddedAt: oldest,
+      newestAddedAt: newest,
+      olderThan1Year,
+      olderThan3Years,
+      olderThan5Years,
+      undated
+    },
+    engagement: { historyAvailable, neverRevisited, notVisitedIn1Year },
+    issueCount
+  };
+}
+
+exports.CLIENT_HEADER = CLIENT_HEADER;
+exports.IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
+exports.MAX_CHANGES_PER_FLUSH = MAX_CHANGES_PER_FLUSH;
+exports.MIN_SUPPORTED_PROTOCOL = MIN_SUPPORTED_PROTOCOL;
+exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
+exports.PROTOCOL_VERSION = PROTOCOL_VERSION;
+exports.apiErrorSchema = apiErrorSchema;
+exports.authGoogleRequestSchema = authGoogleRequestSchema;
+exports.authResponseSchema = authResponseSchema;
+exports.authTokensSchema = authTokensSchema;
+exports.bookmarkStatusSchema = bookmarkStatusSchema;
+exports.buildCleanupReport = buildCleanupReport;
+exports.canonicalizeUrl = canonicalizeUrl;
+exports.clientKindSchema = clientKindSchema;
+exports.contentStateSchema = contentStateSchema;
+exports.editDistance = editDistance;
+exports.epochMsSchema = epochMsSchema;
+exports.flatNodeSchema = flatNodeSchema;
+exports.flattenTree = flattenTree;
+exports.folderOriginSchema = folderOriginSchema;
+exports.isProtocolSupported = isProtocolSupported;
+exports.isUntitled = isUntitled;
+exports.isVagueTitle = isVagueTitle;
+exports.isoDateTimeSchema = isoDateTimeSchema;
+exports.jsonObjectSchema = jsonObjectSchema;
+exports.keySourceSchema = keySourceSchema;
+exports.meResponseSchema = meResponseSchema;
+exports.mutationOpKindSchema = mutationOpKindSchema;
+exports.mutationOpResultSchema = mutationOpResultSchema;
+exports.mutationOpSchema = mutationOpSchema;
+exports.mutationPlanAckSchema = mutationPlanAckSchema;
+exports.mutationPlanSchema = mutationPlanSchema;
+exports.normalizeFolderName = normalizeFolderName;
+exports.parseUrl = parseUrl;
+exports.pathTokens = pathTokens;
+exports.planSchema = planSchema;
+exports.proposalBulkApproveRequestSchema = proposalBulkApproveRequestSchema;
+exports.proposalDecisionResponseSchema = proposalDecisionResponseSchema;
+exports.proposalItemOpSchema = proposalItemOpSchema;
+exports.proposalItemSchema = proposalItemSchema;
+exports.proposalKindSchema = proposalKindSchema;
+exports.proposalSchema = proposalSchema;
+exports.proposalStatusSchema = proposalStatusSchema;
+exports.quotaStateSchema = quotaStateSchema;
+exports.refreshRequestSchema = refreshRequestSchema;
+exports.sha256Hex = sha256Hex;
+exports.stripSubdomain = stripSubdomain;
+exports.syncChangeSchema = syncChangeSchema;
+exports.syncChangesRequestSchema = syncChangesRequestSchema;
+exports.syncChangesResponseSchema = syncChangesResponseSchema;
+exports.syncDiffResponseSchema = syncDiffResponseSchema;
+exports.syncImportRequestSchema = syncImportRequestSchema;
+exports.syncImportResponseSchema = syncImportResponseSchema;
+exports.syncOpKindSchema = syncOpKindSchema;
+exports.syncRejectionSchema = syncRejectionSchema;
+exports.titleEqualsUrl = titleEqualsUrl;
+exports.urlHash = urlHash;
+exports.uuidSchema = uuidSchema;
+//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.cjs.map
