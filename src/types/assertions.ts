@@ -10,9 +10,6 @@
 import { z } from 'zod';
 
 import type {
-  authGoogleRequestSchema,
-  authResponseSchema,
-  authTokensSchema,
   apiErrorSchema,
   flatNodeSchema,
   meResponseSchema,
@@ -24,7 +21,6 @@ import type {
   proposalItemSchema,
   proposalSchema,
   quotaStateSchema,
-  refreshRequestSchema,
   syncChangeSchema,
   syncChangesRequestSchema,
   syncChangesResponseSchema,
@@ -35,9 +31,6 @@ import type {
 
 import type {
   ApiError,
-  AuthGoogleRequest,
-  AuthResponse,
-  AuthTokens,
   FlatNode,
   MeResponse,
   MutationOp,
@@ -48,7 +41,6 @@ import type {
   ProposalDecisionResponse,
   ProposalItem,
   QuotaState,
-  RefreshRequest,
   SyncChange,
   SyncChangesRequest,
   SyncChangesResponse,
@@ -83,12 +75,6 @@ type _MutationPlanAck = Expect<Mutual<z.infer<typeof mutationPlanAckSchema>, Mut
 
 type _QuotaState = Expect<Mutual<z.infer<typeof quotaStateSchema>, QuotaState>>;
 type _MeResponse = Expect<Mutual<z.infer<typeof meResponseSchema>, MeResponse>>;
-type _AuthGoogleRequest = Expect<
-  Mutual<z.infer<typeof authGoogleRequestSchema>, AuthGoogleRequest>
->;
-type _AuthTokens = Expect<Mutual<z.infer<typeof authTokensSchema>, AuthTokens>>;
-type _AuthResponse = Expect<Mutual<z.infer<typeof authResponseSchema>, AuthResponse>>;
-type _RefreshRequest = Expect<Mutual<z.infer<typeof refreshRequestSchema>, RefreshRequest>>;
 type _ApiError = Expect<Mutual<z.infer<typeof apiErrorSchema>, ApiError>>;
 
 type _ProposalItem = Expect<Mutual<z.infer<typeof proposalItemSchema>, ProposalItem>>;
@@ -113,10 +99,6 @@ export type {
   _MutationPlanAck,
   _QuotaState,
   _MeResponse,
-  _AuthGoogleRequest,
-  _AuthTokens,
-  _AuthResponse,
-  _RefreshRequest,
   _ApiError,
   _ProposalItem,
   _Proposal,

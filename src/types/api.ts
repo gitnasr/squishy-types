@@ -1,4 +1,4 @@
-import type { ClientKind, KeySource, Plan, Uuid } from './common.js';
+import type { KeySource, Plan, Uuid } from './common.js';
 
 export interface QuotaState {
   /** Month bucket, `YYYY-MM-01`. */
@@ -18,30 +18,6 @@ export interface MeResponse {
   plan: Plan;
   byokEnabled: boolean;
   quota: QuotaState;
-}
-
-export interface AuthGoogleRequest {
-  /** Google-issued `id_token`; verified server-side, never trusted as-is. */
-  idToken: string;
-  client: ClientKind;
-  deviceLabel?: string;
-}
-
-export interface AuthTokens {
-  accessToken: string;
-  /** Rotating. Stored hashed server-side; the plaintext is shown exactly once. */
-  refreshToken: string;
-  /** Access-token lifetime in seconds. */
-  expiresIn: number;
-}
-
-export interface AuthResponse {
-  tokens: AuthTokens;
-  user: MeResponse;
-}
-
-export interface RefreshRequest {
-  refreshToken: string;
 }
 
 export interface ApiError {

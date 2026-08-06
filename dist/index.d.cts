@@ -340,26 +340,6 @@ interface MeResponse {
     byokEnabled: boolean;
     quota: QuotaState;
 }
-interface AuthGoogleRequest {
-    /** Google-issued `id_token`; verified server-side, never trusted as-is. */
-    idToken: string;
-    client: ClientKind;
-    deviceLabel?: string;
-}
-interface AuthTokens {
-    accessToken: string;
-    /** Rotating. Stored hashed server-side; the plaintext is shown exactly once. */
-    refreshToken: string;
-    /** Access-token lifetime in seconds. */
-    expiresIn: number;
-}
-interface AuthResponse {
-    tokens: AuthTokens;
-    user: MeResponse;
-}
-interface RefreshRequest {
-    refreshToken: string;
-}
 interface ApiError {
     statusCode: number;
     error: string;
@@ -603,50 +583,6 @@ declare const meResponseSchema: z.ZodObject<{
         }>;
     }, z.core.$strip>;
 }, z.core.$strip>;
-declare const authGoogleRequestSchema: z.ZodObject<{
-    idToken: z.ZodString;
-    client: z.ZodEnum<{
-        extension: "extension";
-        web: "web";
-    }>;
-    deviceLabel: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
-declare const authTokensSchema: z.ZodObject<{
-    accessToken: z.ZodString;
-    refreshToken: z.ZodString;
-    expiresIn: z.ZodNumber;
-}, z.core.$strip>;
-declare const authResponseSchema: z.ZodObject<{
-    tokens: z.ZodObject<{
-        accessToken: z.ZodString;
-        refreshToken: z.ZodString;
-        expiresIn: z.ZodNumber;
-    }, z.core.$strip>;
-    user: z.ZodObject<{
-        userId: z.ZodString;
-        email: z.ZodString;
-        displayName: z.ZodNullable<z.ZodString>;
-        avatarUrl: z.ZodNullable<z.ZodString>;
-        plan: z.ZodEnum<{
-            free: "free";
-            pro: "pro";
-        }>;
-        byokEnabled: z.ZodBoolean;
-        quota: z.ZodObject<{
-            period: z.ZodString;
-            limit: z.ZodNumber;
-            used: z.ZodNumber;
-            remaining: z.ZodNumber;
-            keySource: z.ZodEnum<{
-                platform: "platform";
-                byok: "byok";
-            }>;
-        }, z.core.$strip>;
-    }, z.core.$strip>;
-}, z.core.$strip>;
-declare const refreshRequestSchema: z.ZodObject<{
-    refreshToken: z.ZodString;
-}, z.core.$strip>;
 declare const apiErrorSchema: z.ZodObject<{
     statusCode: z.ZodNumber;
     error: z.ZodString;
@@ -801,4 +737,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type AuthGoogleRequest, type AuthResponse, type AuthTokens, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type RefreshRequest, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, authGoogleRequestSchema, authResponseSchema, authTokensSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, refreshRequestSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, urlHash, uuidSchema };

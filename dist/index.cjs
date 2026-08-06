@@ -111,23 +111,6 @@ var meResponseSchema = zod.z.object({
   byokEnabled: zod.z.boolean(),
   quota: quotaStateSchema
 });
-var authGoogleRequestSchema = zod.z.object({
-  idToken: zod.z.string().min(1).max(8192),
-  client: clientKindSchema,
-  deviceLabel: zod.z.string().min(1).max(120).optional()
-});
-var authTokensSchema = zod.z.object({
-  accessToken: zod.z.string(),
-  refreshToken: zod.z.string(),
-  expiresIn: zod.z.number().int().positive()
-});
-var authResponseSchema = zod.z.object({
-  tokens: authTokensSchema,
-  user: meResponseSchema
-});
-var refreshRequestSchema = zod.z.object({
-  refreshToken: zod.z.string().min(1)
-});
 var apiErrorSchema = zod.z.object({
   statusCode: zod.z.number().int(),
   error: zod.z.string(),
@@ -851,9 +834,6 @@ exports.MIN_SUPPORTED_PROTOCOL = MIN_SUPPORTED_PROTOCOL;
 exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
 exports.PROTOCOL_VERSION = PROTOCOL_VERSION;
 exports.apiErrorSchema = apiErrorSchema;
-exports.authGoogleRequestSchema = authGoogleRequestSchema;
-exports.authResponseSchema = authResponseSchema;
-exports.authTokensSchema = authTokensSchema;
 exports.bookmarkStatusSchema = bookmarkStatusSchema;
 exports.buildCleanupReport = buildCleanupReport;
 exports.canonicalizeUrl = canonicalizeUrl;
@@ -888,7 +868,6 @@ exports.proposalKindSchema = proposalKindSchema;
 exports.proposalSchema = proposalSchema;
 exports.proposalStatusSchema = proposalStatusSchema;
 exports.quotaStateSchema = quotaStateSchema;
-exports.refreshRequestSchema = refreshRequestSchema;
 exports.sha256Hex = sha256Hex;
 exports.stripSubdomain = stripSubdomain;
 exports.syncChangeSchema = syncChangeSchema;

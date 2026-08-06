@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   IMPORT_BATCH_SIZE,
-  authGoogleRequestSchema,
   flatNodeSchema,
   syncChangesRequestSchema,
   syncImportRequestSchema,
@@ -68,14 +67,6 @@ describe('syncChangesRequestSchema', () => {
       changes: [],
     });
     expect(result.success).toBe(true);
-  });
-});
-
-describe('authGoogleRequestSchema', () => {
-  it('rejects an unknown client kind', () => {
-    expect(
-      authGoogleRequestSchema.safeParse({ idToken: 'x', client: 'mobile' }).success,
-    ).toBe(false);
   });
 });
 
