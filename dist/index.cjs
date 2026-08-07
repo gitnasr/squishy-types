@@ -37,18 +37,34 @@ var syncChangeSchema = zod.z.object({
   dateAdded: epochMsSchema.nullable(),
   occurredAt: epochMsSchema
 });
+var MAX_MANIFEST_IDS = 5e4;
 var syncImportRequestSchema = zod.z.object({
   deviceId: uuidSchema.nullable(),
   deviceLabel: zod.z.string().min(1).max(120),
   batchIndex: zod.z.number().int().min(0),
   batchCount: zod.z.number().int().min(1),
-  nodes: zod.z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE)
+  nodes: zod.z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE),
+  /**
+   * Every chrome id in the tree being imported, sent on the final batch only.
+   *
+   * An import is chunked, so no single batch knows the whole tree and the
+   * server cannot tell "absent from this batch" from "gone from the browser".
+   * The manifest is what makes a reinstall able to *subtract*: bookmarks
+   * deleted while the extension was uninstalled emitted no events and are
+   * absent from the replayed tree, so without it the server keeps them forever.
+   *
+   * Optional because it is additive — an older extension omits it and simply
+   * gets the old add-only behaviour rather than a rejected import.
+   */
+  presentChromeIds: zod.z.array(zod.z.string().min(1).max(128)).max(MAX_MANIFEST_IDS).optional()
 });
 var syncImportResponseSchema = zod.z.object({
   deviceId: uuidSchema,
   accepted: zod.z.number().int().nonnegative(),
   deduped: zod.z.number().int().nonnegative(),
-  cursor: zod.z.number().int().nonnegative()
+  cursor: zod.z.number().int().nonnegative(),
+  /** Rows soft-deleted because the manifest did not list them. */
+  pruned: zod.z.number().int().nonnegative().optional()
 });
 var syncChangesRequestSchema = zod.z.object({
   deviceId: uuidSchema,
@@ -851,6 +867,7 @@ function treeSize(nodes) {
 exports.CLIENT_HEADER = CLIENT_HEADER;
 exports.IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
 exports.MAX_CHANGES_PER_FLUSH = MAX_CHANGES_PER_FLUSH;
+exports.MAX_MANIFEST_IDS = MAX_MANIFEST_IDS;
 exports.MIN_SUPPORTED_PROTOCOL = MIN_SUPPORTED_PROTOCOL;
 exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
 exports.PROTOCOL_VERSION = PROTOCOL_VERSION;

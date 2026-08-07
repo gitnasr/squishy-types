@@ -35,18 +35,34 @@ var syncChangeSchema = z.object({
   dateAdded: epochMsSchema.nullable(),
   occurredAt: epochMsSchema
 });
+var MAX_MANIFEST_IDS = 5e4;
 var syncImportRequestSchema = z.object({
   deviceId: uuidSchema.nullable(),
   deviceLabel: z.string().min(1).max(120),
   batchIndex: z.number().int().min(0),
   batchCount: z.number().int().min(1),
-  nodes: z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE)
+  nodes: z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE),
+  /**
+   * Every chrome id in the tree being imported, sent on the final batch only.
+   *
+   * An import is chunked, so no single batch knows the whole tree and the
+   * server cannot tell "absent from this batch" from "gone from the browser".
+   * The manifest is what makes a reinstall able to *subtract*: bookmarks
+   * deleted while the extension was uninstalled emitted no events and are
+   * absent from the replayed tree, so without it the server keeps them forever.
+   *
+   * Optional because it is additive — an older extension omits it and simply
+   * gets the old add-only behaviour rather than a rejected import.
+   */
+  presentChromeIds: z.array(z.string().min(1).max(128)).max(MAX_MANIFEST_IDS).optional()
 });
 var syncImportResponseSchema = z.object({
   deviceId: uuidSchema,
   accepted: z.number().int().nonnegative(),
   deduped: z.number().int().nonnegative(),
-  cursor: z.number().int().nonnegative()
+  cursor: z.number().int().nonnegative(),
+  /** Rows soft-deleted because the manifest did not list them. */
+  pruned: z.number().int().nonnegative().optional()
 });
 var syncChangesRequestSchema = z.object({
   deviceId: uuidSchema,
@@ -846,6 +862,6 @@ function treeSize(nodes) {
   return { bookmarks, folders };
 }
 
-export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

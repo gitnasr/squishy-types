@@ -26,6 +26,11 @@ export interface SyncImportRequest {
   batchIndex: number;
   batchCount: number;
   nodes: FlatNode[];
+  /**
+   * Every chrome id in the tree, on the final batch only. Lets a reinstall
+   * subtract as well as add — see `syncImportRequestSchema`.
+   */
+  presentChromeIds?: string[];
 }
 
 export interface SyncImportResponse {
@@ -33,6 +38,8 @@ export interface SyncImportResponse {
   accepted: number;
   deduped: number;
   cursor: number;
+  /** Rows soft-deleted because the manifest did not list them. */
+  pruned?: number;
 }
 
 export interface SyncChangesRequest {

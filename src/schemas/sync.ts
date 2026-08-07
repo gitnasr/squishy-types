@@ -19,12 +19,32 @@ export const syncChangeSchema = z.object({
   occurredAt: epochMsSchema,
 });
 
+/**
+ * Upper bound on the id manifest. Well past any real profile — a 5,000-node
+ * tree is about 60 KB of ids — but bounded so a malformed client cannot make
+ * the server hold an unbounded array.
+ */
+export const MAX_MANIFEST_IDS = 50_000;
+
 export const syncImportRequestSchema = z.object({
   deviceId: uuidSchema.nullable(),
   deviceLabel: z.string().min(1).max(120),
   batchIndex: z.number().int().min(0),
   batchCount: z.number().int().min(1),
   nodes: z.array(flatNodeSchema).max(IMPORT_BATCH_SIZE),
+  /**
+   * Every chrome id in the tree being imported, sent on the final batch only.
+   *
+   * An import is chunked, so no single batch knows the whole tree and the
+   * server cannot tell "absent from this batch" from "gone from the browser".
+   * The manifest is what makes a reinstall able to *subtract*: bookmarks
+   * deleted while the extension was uninstalled emitted no events and are
+   * absent from the replayed tree, so without it the server keeps them forever.
+   *
+   * Optional because it is additive — an older extension omits it and simply
+   * gets the old add-only behaviour rather than a rejected import.
+   */
+  presentChromeIds: z.array(z.string().min(1).max(128)).max(MAX_MANIFEST_IDS).optional(),
 });
 
 export const syncImportResponseSchema = z.object({
@@ -32,6 +52,8 @@ export const syncImportResponseSchema = z.object({
   accepted: z.number().int().nonnegative(),
   deduped: z.number().int().nonnegative(),
   cursor: z.number().int().nonnegative(),
+  /** Rows soft-deleted because the manifest did not list them. */
+  pruned: z.number().int().nonnegative().optional(),
 });
 
 export const syncChangesRequestSchema = z.object({
