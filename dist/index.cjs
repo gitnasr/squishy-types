@@ -179,6 +179,58 @@ var proposalDecisionResponseSchema = zod.z.object({
   rejected: zod.z.number().int().nonnegative(),
   planIds: zod.z.array(uuidSchema)
 });
+var MAX_TELEMETRY_EVENTS = 200;
+var telemetryEventNames = [
+  "popup.opened",
+  "report.generated",
+  "report.cta_clicked",
+  "report.history_permission",
+  "extension.installed",
+  "extension.updated",
+  "sync.imported",
+  "sync.flushed",
+  "sync.rejected",
+  "sync.drift",
+  "sync.flush_failed"
+];
+var telemetryLabelValues = {
+  size: ["0", "1-99", "100-499", "500-999", "1k-5k", "5k+"],
+  issues: ["0", "1-9", "10-49", "50-199", "200+"],
+  signedIn: ["true", "false"],
+  granted: ["true", "false"],
+  historyAvailable: ["true", "false"]
+};
+var telemetryMeasures = [
+  "durationMs",
+  "duplicates",
+  "emptyFolders",
+  "singleItemFolders",
+  "maxDepth",
+  "nodes",
+  "batches",
+  "sent",
+  "applied",
+  "count",
+  "pruned"
+];
+var telemetryEventNameSchema = zod.z.enum(telemetryEventNames);
+var telemetryClientSchema = zod.z.enum(["extension", "web"]);
+var telemetryEventSchema = zod.z.object({
+  name: zod.z.string().min(1).max(64),
+  attributes: zod.z.record(
+    zod.z.string().max(40),
+    zod.z.union([zod.z.number(), zod.z.string().max(64), zod.z.boolean()])
+  ),
+  at: epochMsSchema
+});
+var telemetryBatchSchema = zod.z.object({
+  client: telemetryClientSchema,
+  events: zod.z.array(telemetryEventSchema).max(MAX_TELEMETRY_EVENTS)
+});
+var telemetryIngestResponseSchema = zod.z.object({
+  accepted: zod.z.number().int().nonnegative(),
+  dropped: zod.z.number().int().nonnegative()
+});
 
 // src/url/sha256.ts
 var K = new Uint32Array([
@@ -868,6 +920,7 @@ exports.CLIENT_HEADER = CLIENT_HEADER;
 exports.IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
 exports.MAX_CHANGES_PER_FLUSH = MAX_CHANGES_PER_FLUSH;
 exports.MAX_MANIFEST_IDS = MAX_MANIFEST_IDS;
+exports.MAX_TELEMETRY_EVENTS = MAX_TELEMETRY_EVENTS;
 exports.MIN_SUPPORTED_PROTOCOL = MIN_SUPPORTED_PROTOCOL;
 exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
 exports.PROTOCOL_VERSION = PROTOCOL_VERSION;
@@ -916,6 +969,14 @@ exports.syncImportRequestSchema = syncImportRequestSchema;
 exports.syncImportResponseSchema = syncImportResponseSchema;
 exports.syncOpKindSchema = syncOpKindSchema;
 exports.syncRejectionSchema = syncRejectionSchema;
+exports.telemetryBatchSchema = telemetryBatchSchema;
+exports.telemetryClientSchema = telemetryClientSchema;
+exports.telemetryEventNameSchema = telemetryEventNameSchema;
+exports.telemetryEventNames = telemetryEventNames;
+exports.telemetryEventSchema = telemetryEventSchema;
+exports.telemetryIngestResponseSchema = telemetryIngestResponseSchema;
+exports.telemetryLabelValues = telemetryLabelValues;
+exports.telemetryMeasures = telemetryMeasures;
 exports.titleEqualsUrl = titleEqualsUrl;
 exports.treeHash = treeHash;
 exports.treeSize = treeSize;

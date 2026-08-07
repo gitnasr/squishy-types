@@ -18,6 +18,10 @@ import type {
   mutationPlanSchema,
   proposalBulkApproveRequestSchema,
   proposalDecisionResponseSchema,
+  telemetryBatchSchema,
+  telemetryEventNameSchema,
+  telemetryEventSchema,
+  telemetryIngestResponseSchema,
   proposalItemSchema,
   proposalSchema,
   quotaStateSchema,
@@ -47,6 +51,10 @@ import type {
   SyncDiffResponse,
   SyncImportRequest,
   SyncImportResponse,
+  TelemetryBatch,
+  TelemetryEvent,
+  TelemetryEventName,
+  TelemetryIngestResponse,
 } from './index.js';
 
 /** `false` when the two types are not mutually assignable. */
@@ -86,7 +94,24 @@ type _ProposalDecision = Expect<
   Mutual<z.infer<typeof proposalDecisionResponseSchema>, ProposalDecisionResponse>
 >;
 
+/**
+ * The telemetry allowlist is the whole defence on an unauthenticated write
+ * path, so a schema that drifts from its type is a security bug, not a typo.
+ */
+type _TelemetryEventName = Expect<
+  Mutual<z.infer<typeof telemetryEventNameSchema>, TelemetryEventName>
+>;
+type _TelemetryEvent = Expect<Mutual<z.infer<typeof telemetryEventSchema>, TelemetryEvent>>;
+type _TelemetryBatch = Expect<Mutual<z.infer<typeof telemetryBatchSchema>, TelemetryBatch>>;
+type _TelemetryIngest = Expect<
+  Mutual<z.infer<typeof telemetryIngestResponseSchema>, TelemetryIngestResponse>
+>;
+
 export type {
+  _TelemetryEventName,
+  _TelemetryEvent,
+  _TelemetryBatch,
+  _TelemetryIngest,
   _FlatNode,
   _SyncChange,
   _SyncImportRequest,

@@ -356,6 +356,56 @@ interface ApiError {
     minProtocolVersion?: number;
 }
 
+/**
+ * Client telemetry.
+ *
+ * The extension cannot export to Alloy directly. Alloy requires basic auth, and
+ * an extension ships to users' machines — any credential compiled into it is
+ * public the moment someone unzips the `.crx`. So events travel to the API,
+ * which holds the credential server-side and re-emits them.
+ *
+ * That makes the ingest endpoint an **unauthenticated write path**, because the
+ * activation funnel is mostly pre-sign-in and gating it would measure only the
+ * users who already converted. The protection is not authentication but shape:
+ * event names and attribute values come from closed sets, and the server drops
+ * anything outside them. Nothing a client sends can become a new metric label,
+ * so nothing a client sends can inflate cardinality.
+ */
+type TelemetryEventName = 'popup.opened' | 'report.generated' | 'report.cta_clicked' | 'report.history_permission' | 'extension.installed' | 'extension.updated' | 'sync.imported' | 'sync.flushed' | 'sync.rejected' | 'sync.drift' | 'sync.flush_failed';
+/**
+ * Attributes allowed to become metric labels.
+ *
+ * A label whose values come from the client is a cardinality bomb: one attacker
+ * sending a million distinct values creates a million time series, and Mimir
+ * does not forget them quickly. So every one of these is a small closed set.
+ */
+type TelemetryLabel = 'size' | 'issues' | 'signedIn' | 'granted' | 'historyAvailable';
+/**
+ * Numeric attributes recorded as measurements rather than labels.
+ *
+ * A count belongs in a histogram, never in a label — `duplicates=417` as a
+ * label is a unique time series per user.
+ */
+type TelemetryMeasure = 'durationMs' | 'duplicates' | 'emptyFolders' | 'singleItemFolders' | 'maxDepth' | 'nodes' | 'batches' | 'sent' | 'applied' | 'count' | 'pruned';
+type TelemetryClient = 'extension' | 'web';
+interface TelemetryEvent {
+    name: string;
+    /** Counts and buckets only — never a URL, title, or anything user-authored. */
+    attributes: Record<string, number | string | boolean>;
+    at: EpochMs;
+}
+interface TelemetryBatch {
+    /** Which client sent this. Not a user id — there may not be a user. */
+    client: TelemetryClient;
+    events: TelemetryEvent[];
+}
+interface TelemetryIngestResponse {
+    /** Events that matched the allowlist and were re-emitted. */
+    accepted: number;
+    /** Events dropped for an unknown name. Surfaced so drift is visible. */
+    dropped: number;
+}
+
 /** Regex rather than `z.uuid()` so the schema behaves identically across zod minors. */
 declare const uuidSchema: z.ZodString;
 declare const isoDateTimeSchema: z.ZodString;
@@ -690,6 +740,76 @@ declare const proposalDecisionResponseSchema: z.ZodObject<{
 }, z.core.$strip>;
 
 /**
+ * The closed sets behind client telemetry.
+ *
+ * These are the actual defence on an unauthenticated write path. Validation
+ * here decides what can become a metric label, and therefore bounds how many
+ * time series a hostile client can create — which is the only attack that
+ * matters against a metrics ingest.
+ */
+/** A batch larger than this is a client bug or an attack. Neither deserves service. */
+declare const MAX_TELEMETRY_EVENTS = 200;
+declare const telemetryEventNames: readonly ["popup.opened", "report.generated", "report.cta_clicked", "report.history_permission", "extension.installed", "extension.updated", "sync.imported", "sync.flushed", "sync.rejected", "sync.drift", "sync.flush_failed"];
+/**
+ * Allowed label values, per label.
+ *
+ * Booleans arrive as real booleans and are stringified server-side; the string
+ * forms are listed so the check is one lookup either way.
+ */
+declare const telemetryLabelValues: {
+    readonly size: readonly ["0", "1-99", "100-499", "500-999", "1k-5k", "5k+"];
+    readonly issues: readonly ["0", "1-9", "10-49", "50-199", "200+"];
+    readonly signedIn: readonly ["true", "false"];
+    readonly granted: readonly ["true", "false"];
+    readonly historyAvailable: readonly ["true", "false"];
+};
+declare const telemetryMeasures: readonly ["durationMs", "duplicates", "emptyFolders", "singleItemFolders", "maxDepth", "nodes", "batches", "sent", "applied", "count", "pruned"];
+declare const telemetryEventNameSchema: z.ZodEnum<{
+    "popup.opened": "popup.opened";
+    "report.generated": "report.generated";
+    "report.cta_clicked": "report.cta_clicked";
+    "report.history_permission": "report.history_permission";
+    "extension.installed": "extension.installed";
+    "extension.updated": "extension.updated";
+    "sync.imported": "sync.imported";
+    "sync.flushed": "sync.flushed";
+    "sync.rejected": "sync.rejected";
+    "sync.drift": "sync.drift";
+    "sync.flush_failed": "sync.flush_failed";
+}>;
+declare const telemetryClientSchema: z.ZodEnum<{
+    extension: "extension";
+    web: "web";
+}>;
+/**
+ * Note the loose `name`: an unknown event is **dropped, not rejected**.
+ *
+ * A newer extension emitting an event this API has not heard of must not have
+ * its whole batch refused — the other events in it are still true, and users
+ * sit on stale builds for weeks in both directions.
+ */
+declare const telemetryEventSchema: z.ZodObject<{
+    name: z.ZodString;
+    attributes: z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodNumber, z.ZodString, z.ZodBoolean]>>;
+    at: z.ZodNumber;
+}, z.core.$strip>;
+declare const telemetryBatchSchema: z.ZodObject<{
+    client: z.ZodEnum<{
+        extension: "extension";
+        web: "web";
+    }>;
+    events: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        attributes: z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodNumber, z.ZodString, z.ZodBoolean]>>;
+        at: z.ZodNumber;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+declare const telemetryIngestResponseSchema: z.ZodObject<{
+    accepted: z.ZodNumber;
+    dropped: z.ZodNumber;
+}, z.core.$strip>;
+
+/**
  * Self-contained SHA-256.
  *
  * This is the identity function for the whole product: `urlHash` decides
@@ -783,4 +903,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };

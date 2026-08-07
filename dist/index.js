@@ -177,6 +177,58 @@ var proposalDecisionResponseSchema = z.object({
   rejected: z.number().int().nonnegative(),
   planIds: z.array(uuidSchema)
 });
+var MAX_TELEMETRY_EVENTS = 200;
+var telemetryEventNames = [
+  "popup.opened",
+  "report.generated",
+  "report.cta_clicked",
+  "report.history_permission",
+  "extension.installed",
+  "extension.updated",
+  "sync.imported",
+  "sync.flushed",
+  "sync.rejected",
+  "sync.drift",
+  "sync.flush_failed"
+];
+var telemetryLabelValues = {
+  size: ["0", "1-99", "100-499", "500-999", "1k-5k", "5k+"],
+  issues: ["0", "1-9", "10-49", "50-199", "200+"],
+  signedIn: ["true", "false"],
+  granted: ["true", "false"],
+  historyAvailable: ["true", "false"]
+};
+var telemetryMeasures = [
+  "durationMs",
+  "duplicates",
+  "emptyFolders",
+  "singleItemFolders",
+  "maxDepth",
+  "nodes",
+  "batches",
+  "sent",
+  "applied",
+  "count",
+  "pruned"
+];
+var telemetryEventNameSchema = z.enum(telemetryEventNames);
+var telemetryClientSchema = z.enum(["extension", "web"]);
+var telemetryEventSchema = z.object({
+  name: z.string().min(1).max(64),
+  attributes: z.record(
+    z.string().max(40),
+    z.union([z.number(), z.string().max(64), z.boolean()])
+  ),
+  at: epochMsSchema
+});
+var telemetryBatchSchema = z.object({
+  client: telemetryClientSchema,
+  events: z.array(telemetryEventSchema).max(MAX_TELEMETRY_EVENTS)
+});
+var telemetryIngestResponseSchema = z.object({
+  accepted: z.number().int().nonnegative(),
+  dropped: z.number().int().nonnegative()
+});
 
 // src/url/sha256.ts
 var K = new Uint32Array([
@@ -862,6 +914,6 @@ function treeSize(nodes) {
   return { bookmarks, folders };
 }
 
-export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map
