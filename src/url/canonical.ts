@@ -63,7 +63,15 @@ export function canonicalizeUrl(raw: string): string {
   }
 
   const host = stripSubdomain(url.hostname);
-  const port = url.port && url.port !== DEFAULT_PORTS[url.protocol] ? `:${url.port}` : '';
+
+  // Judged against the scheme we *emit*, not only the one we were given.
+  // Output is always https, so `http://host:443` would otherwise canonicalise
+  // to `https://host:443` and then to `https://host` — an identity that
+  // changes on its second pass through the pipeline, which is enough to break
+  // dedupe intermittently and make the resulting drift unexplainable.
+  const isDefaultPort =
+    url.port === '' || url.port === DEFAULT_PORTS[url.protocol] || url.port === '443';
+  const port = isDefaultPort ? '' : `:${url.port}`;
 
   const params: [string, string][] = [];
   url.searchParams.forEach((value, key) => {

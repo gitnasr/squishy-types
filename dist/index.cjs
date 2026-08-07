@@ -382,7 +382,8 @@ function canonicalizeUrl(raw) {
     return trimmed;
   }
   const host = stripSubdomain(url.hostname);
-  const port = url.port && url.port !== DEFAULT_PORTS[url.protocol] ? `:${url.port}` : "";
+  const isDefaultPort = url.port === "" || url.port === DEFAULT_PORTS[url.protocol] || url.port === "443";
+  const port = isDefaultPort ? "" : `:${url.port}`;
   const params = [];
   url.searchParams.forEach((value, key) => {
     if (!isTrackingParam(key)) params.push([key, value]);

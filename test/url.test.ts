@@ -43,6 +43,10 @@ describe('canonicalizeUrl', () => {
     expect(canonicalizeUrl('https://example.com/a/')).toBe('https://example.com/a');
     expect(canonicalizeUrl('https://example.com:443/a')).toBe('https://example.com/a');
     expect(canonicalizeUrl('https://example.com:8443/a')).toBe('https://example.com:8443/a');
+    // 443 is the default for the scheme we emit, not the one we were handed.
+    // Keeping it here made canonicalisation non-idempotent.
+    expect(canonicalizeUrl('http://example.com:443/a')).toBe('https://example.com/a');
+    expect(canonicalizeUrl('https://example.com:80/a')).toBe('https://example.com:80/a');
   });
 
   it('leaves non-http URLs alone', () => {
