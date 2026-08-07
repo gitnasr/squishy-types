@@ -406,6 +406,41 @@ interface TelemetryIngestResponse {
     dropped: number;
 }
 
+/**
+ * Categorisation.
+ *
+ * The preset taxonomy is a seed, not a cage — the LLM may propose a new
+ * category, but only when it can justify one (spec §6.2). Keeping the seed
+ * here means the rule pass, the prompt and the review queue all name categories
+ * identically; three copies of this list would produce three folder trees.
+ */
+type Category = 'Development' | 'DevOps & Infra' | 'AI & ML' | 'Design & UI' | 'Product & Business' | 'Career & Jobs' | 'Learning & Courses' | 'Documentation & Reference' | 'Tools & Utilities' | 'News & Articles' | 'Research & Papers' | 'Finance' | 'Health' | 'Travel' | 'Shopping' | 'Entertainment' | 'Social & Community' | 'Personal' | 'Unsorted';
+/** Where a classification came from. Drives whether it draws quota. */
+type ClassificationSource = 'rule' | 'llm';
+interface Classification {
+    category: Category;
+    /** 0–1. The rule pass never returns below `RULE_CONFIDENCE_FLOOR`. */
+    confidence: number;
+    source: ClassificationSource;
+    /** Short human-readable "why", shown verbatim in the review queue. */
+    rationale: string;
+}
+/** What the rule pass needs to decide. Deliberately not a full `FlatNode`. */
+interface ClassifiableBookmark {
+    id: string;
+    url: string;
+    title: string;
+}
+interface RulePassResult {
+    /** Confidently classified at zero cost. These never reach an LLM. */
+    classified: {
+        id: string;
+        classification: Classification;
+    }[];
+    /** Everything the rules would only be guessing at. */
+    unresolved: ClassifiableBookmark[];
+}
+
 /** Regex rather than `z.uuid()` so the schema behaves identically across zod minors. */
 declare const uuidSchema: z.ZodString;
 declare const isoDateTimeSchema: z.ZodString;
@@ -889,6 +924,53 @@ declare function treeSize(nodes: FlatNode[]): {
 };
 
 /**
+ * The deterministic rule pass.
+ *
+ * Runs before any LLM call and short-circuits the obvious cases at zero cost.
+ * `github.com/user/repo` and `stackoverflow.com/questions/…` do not need a
+ * language model to classify, and spending one on them is money burned on a
+ * problem a lookup table solves.
+ *
+ * This is also a quota decision, not just a cost one: rule-based results
+ * **do not draw down a user's 20 free URLs** (spec §5). So the honest bar for
+ * putting a domain in this table is "I would be comfortable showing this
+ * classification to the user with no further thought" — a rule that is merely
+ * probable belongs in `unresolved`, where the LLM can look at the title too.
+ *
+ * Pure: no I/O, no `chrome.*`, no network. It runs identically in the
+ * extension, the API and the worker.
+ */
+/**
+ * Confidence assigned to a domain match.
+ *
+ * Not 1.0 — a domain is strong evidence, never proof. `github.com` hosts blogs
+ * and `medium.com` hosts engineering posts. Leaving headroom keeps the number
+ * meaningful when the LLM later reports its own.
+ */
+declare const RULE_CONFIDENCE_DOMAIN = 0.9;
+/** A path or title match on top of a weaker domain signal. */
+declare const RULE_CONFIDENCE_PATH = 0.8;
+/** Below this the rule pass declines to answer and defers to the LLM. */
+declare const RULE_CONFIDENCE_FLOOR = 0.8;
+/**
+ * Classifies one bookmark, or declines.
+ *
+ * Returns `null` rather than guessing. A wrong category that costs nothing is
+ * still wrong, and the user sees it in the review queue either way — the rule
+ * pass saves money, not trust.
+ */
+declare function classifyByRule(bookmark: ClassifiableBookmark): Classification | null;
+/**
+ * Splits a set of bookmarks into "already answered" and "worth paying for".
+ *
+ * The ratio is the number that decides what categorisation costs. It is worth
+ * watching: a corpus where the rules answer 40% is a corpus where the LLM bill
+ * is 40% smaller, and the cheapest way to reduce spend is to add a domain here
+ * rather than to tune a prompt.
+ */
+declare function runRulePass(bookmarks: ClassifiableBookmark[]): RulePassResult;
+
+/**
  * Wire protocol version.
  *
  * Extension users sit on stale builds for weeks, so the version travels in a
@@ -903,4 +985,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type Category, type ClassifiableBookmark, type Classification, type ClassificationSource, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type RulePassResult, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };

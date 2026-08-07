@@ -5,3 +5,4 @@ export type * from './proposal.js';
 export type * from './report.js';
 export type * from './api.js';
 export type * from './telemetry.js';
+export type * from './taxonomy.js';

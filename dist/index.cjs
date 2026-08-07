@@ -916,6 +916,209 @@ function treeSize(nodes) {
   return { bookmarks, folders };
 }
 
+// src/classify/rules.ts
+var RULE_CONFIDENCE_DOMAIN = 0.9;
+var RULE_CONFIDENCE_PATH = 0.8;
+var RULE_CONFIDENCE_FLOOR = 0.8;
+var DOMAIN_RULES = [
+  // Development
+  ["github.com", "Development"],
+  ["gitlab.com", "Development"],
+  ["bitbucket.org", "Development"],
+  ["stackoverflow.com", "Development"],
+  ["stackexchange.com", "Development"],
+  ["npmjs.com", "Development"],
+  ["pypi.org", "Development"],
+  ["crates.io", "Development"],
+  ["packagist.org", "Development"],
+  ["rubygems.org", "Development"],
+  ["codepen.io", "Development"],
+  ["codesandbox.io", "Development"],
+  ["leetcode.com", "Development"],
+  ["codewars.com", "Development"],
+  // DevOps & Infra
+  ["docker.com", "DevOps & Infra"],
+  ["hub.docker.com", "DevOps & Infra"],
+  ["kubernetes.io", "DevOps & Infra"],
+  ["terraform.io", "DevOps & Infra"],
+  ["aws.amazon.com", "DevOps & Infra"],
+  ["console.aws.amazon.com", "DevOps & Infra"],
+  ["cloud.google.com", "DevOps & Infra"],
+  ["azure.microsoft.com", "DevOps & Infra"],
+  ["digitalocean.com", "DevOps & Infra"],
+  ["cloudflare.com", "DevOps & Infra"],
+  ["grafana.com", "DevOps & Infra"],
+  ["prometheus.io", "DevOps & Infra"],
+  // AI & ML
+  ["huggingface.co", "AI & ML"],
+  ["openai.com", "AI & ML"],
+  ["anthropic.com", "AI & ML"],
+  ["claude.ai", "AI & ML"],
+  ["kaggle.com", "AI & ML"],
+  ["pytorch.org", "AI & ML"],
+  ["tensorflow.org", "AI & ML"],
+  ["paperswithcode.com", "AI & ML"],
+  // Design & UI
+  ["figma.com", "Design & UI"],
+  ["dribbble.com", "Design & UI"],
+  ["behance.net", "Design & UI"],
+  ["unsplash.com", "Design & UI"],
+  ["fonts.google.com", "Design & UI"],
+  ["coolors.co", "Design & UI"],
+  // Documentation & Reference
+  ["developer.mozilla.org", "Documentation & Reference"],
+  ["docs.python.org", "Documentation & Reference"],
+  ["docs.rs", "Documentation & Reference"],
+  ["readthedocs.io", "Documentation & Reference"],
+  ["w3.org", "Documentation & Reference"],
+  ["caniuse.com", "Documentation & Reference"],
+  // Research & Papers
+  ["arxiv.org", "Research & Papers"],
+  ["scholar.google.com", "Research & Papers"],
+  ["pubmed.ncbi.nlm.nih.gov", "Research & Papers"],
+  ["jstor.org", "Research & Papers"],
+  ["sciencedirect.com", "Research & Papers"],
+  ["nature.com", "Research & Papers"],
+  // Learning & Courses
+  ["coursera.org", "Learning & Courses"],
+  ["udemy.com", "Learning & Courses"],
+  ["edx.org", "Learning & Courses"],
+  ["khanacademy.org", "Learning & Courses"],
+  ["freecodecamp.org", "Learning & Courses"],
+  ["pluralsight.com", "Learning & Courses"],
+  // Career & Jobs
+  ["linkedin.com", "Career & Jobs"],
+  ["indeed.com", "Career & Jobs"],
+  ["glassdoor.com", "Career & Jobs"],
+  ["wellfound.com", "Career & Jobs"],
+  // News & Articles
+  ["news.ycombinator.com", "News & Articles"],
+  ["bbc.com", "News & Articles"],
+  ["theguardian.com", "News & Articles"],
+  ["reuters.com", "News & Articles"],
+  ["techcrunch.com", "News & Articles"],
+  ["arstechnica.com", "News & Articles"],
+  // Social & Community
+  ["reddit.com", "Social & Community"],
+  ["x.com", "Social & Community"],
+  ["twitter.com", "Social & Community"],
+  ["facebook.com", "Social & Community"],
+  ["instagram.com", "Social & Community"],
+  ["discord.com", "Social & Community"],
+  ["mastodon.social", "Social & Community"],
+  // Entertainment
+  ["youtube.com", "Entertainment"],
+  ["youtu.be", "Entertainment"],
+  ["netflix.com", "Entertainment"],
+  ["twitch.tv", "Entertainment"],
+  ["spotify.com", "Entertainment"],
+  ["imdb.com", "Entertainment"],
+  // Shopping
+  ["amazon.com", "Shopping"],
+  ["ebay.com", "Shopping"],
+  ["etsy.com", "Shopping"],
+  ["aliexpress.com", "Shopping"],
+  // Finance
+  ["coinbase.com", "Finance"],
+  ["binance.com", "Finance"],
+  ["tradingview.com", "Finance"],
+  ["bloomberg.com", "Finance"],
+  // Travel
+  ["booking.com", "Travel"],
+  ["airbnb.com", "Travel"],
+  ["tripadvisor.com", "Travel"],
+  ["skyscanner.net", "Travel"],
+  // Health
+  ["who.int", "Health"],
+  ["mayoclinic.org", "Health"],
+  ["healthline.com", "Health"],
+  // Product & Business
+  ["producthunt.com", "Product & Business"],
+  ["notion.so", "Product & Business"],
+  ["atlassian.net", "Product & Business"],
+  ["trello.com", "Product & Business"]
+];
+var AMBIGUOUS_DOMAINS = /* @__PURE__ */ new Set([
+  "medium.com",
+  "substack.com",
+  "dev.to",
+  "hashnode.dev",
+  "blogspot.com",
+  "wordpress.com",
+  "tumblr.com",
+  "google.com",
+  "docs.google.com",
+  "drive.google.com",
+  "dropbox.com",
+  "pinterest.com",
+  "quora.com",
+  "wikipedia.org"
+]);
+var PATH_RULES = [
+  [/^\/questions\//, "Development", "a question thread"],
+  [/^\/(docs|documentation|reference|api)(\/|$)/, "Documentation & Reference", "a docs path"],
+  [/^\/(blog|posts?|articles?)(\/|$)/, "News & Articles", "an article path"],
+  [/^\/(jobs?|careers?)(\/|$)/, "Career & Jobs", "a careers path"],
+  [/^\/(pricing|checkout|cart)(\/|$)/, "Shopping", "a commerce path"]
+];
+function matchDomain(host) {
+  for (const [domain, category] of DOMAIN_RULES) {
+    if (host === domain || host.endsWith(`.${domain}`)) return category;
+  }
+  return null;
+}
+function isAmbiguous(host) {
+  for (const domain of AMBIGUOUS_DOMAINS) {
+    if (host === domain || host.endsWith(`.${domain}`)) return true;
+  }
+  return false;
+}
+function classifyByRule(bookmark) {
+  const parts = parseUrl(bookmark.url);
+  if (parts.host === "") return null;
+  const host = parts.domain;
+  if (isAmbiguous(host)) return null;
+  const byDomain = matchDomain(host);
+  if (byDomain) {
+    return {
+      category: byDomain,
+      confidence: RULE_CONFIDENCE_DOMAIN,
+      source: "rule",
+      rationale: `${host} is a ${byDomain.toLowerCase()} site`
+    };
+  }
+  let pathname = "";
+  try {
+    pathname = new URL(parts.canonical).pathname;
+  } catch {
+    return null;
+  }
+  for (const [pattern, category, why] of PATH_RULES) {
+    if (pattern.test(pathname)) {
+      return {
+        category,
+        confidence: RULE_CONFIDENCE_PATH,
+        source: "rule",
+        rationale: `${host} on ${why}`
+      };
+    }
+  }
+  return null;
+}
+function runRulePass(bookmarks) {
+  const classified = [];
+  const unresolved = [];
+  for (const bookmark of bookmarks) {
+    const classification = classifyByRule(bookmark);
+    if (classification && classification.confidence >= RULE_CONFIDENCE_FLOOR) {
+      classified.push({ id: bookmark.id, classification });
+    } else {
+      unresolved.push(bookmark);
+    }
+  }
+  return { classified, unresolved };
+}
+
 exports.CLIENT_HEADER = CLIENT_HEADER;
 exports.IMPORT_BATCH_SIZE = IMPORT_BATCH_SIZE;
 exports.MAX_CHANGES_PER_FLUSH = MAX_CHANGES_PER_FLUSH;
@@ -924,10 +1127,14 @@ exports.MAX_TELEMETRY_EVENTS = MAX_TELEMETRY_EVENTS;
 exports.MIN_SUPPORTED_PROTOCOL = MIN_SUPPORTED_PROTOCOL;
 exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
 exports.PROTOCOL_VERSION = PROTOCOL_VERSION;
+exports.RULE_CONFIDENCE_DOMAIN = RULE_CONFIDENCE_DOMAIN;
+exports.RULE_CONFIDENCE_FLOOR = RULE_CONFIDENCE_FLOOR;
+exports.RULE_CONFIDENCE_PATH = RULE_CONFIDENCE_PATH;
 exports.apiErrorSchema = apiErrorSchema;
 exports.bookmarkStatusSchema = bookmarkStatusSchema;
 exports.buildCleanupReport = buildCleanupReport;
 exports.canonicalizeUrl = canonicalizeUrl;
+exports.classifyByRule = classifyByRule;
 exports.clientKindSchema = clientKindSchema;
 exports.contentStateSchema = contentStateSchema;
 exports.editDistance = editDistance;
@@ -959,6 +1166,7 @@ exports.proposalKindSchema = proposalKindSchema;
 exports.proposalSchema = proposalSchema;
 exports.proposalStatusSchema = proposalStatusSchema;
 exports.quotaStateSchema = quotaStateSchema;
+exports.runRulePass = runRulePass;
 exports.sha256Hex = sha256Hex;
 exports.stripSubdomain = stripSubdomain;
 exports.syncChangeSchema = syncChangeSchema;
