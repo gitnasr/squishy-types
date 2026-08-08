@@ -92,3 +92,17 @@ export interface ReviewQueueResponse {
   groups: ReviewGroup[];
   total: number;
 }
+
+/**
+ * An applied batch that can still be reversed.
+ *
+ * Undo is what makes approving two hundred changes at once reasonable rather
+ * than reckless, so it has to be reachable — a safety net nobody can find is
+ * not a safety net.
+ */
+export interface UndoableChange {
+  id: Uuid;
+  appliedAt: IsoDateTime;
+  /** How many browser operations reversing it would perform. */
+  ops: number;
+}
