@@ -1,6 +1,6 @@
 {
   "name": "@squishy/types",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Shared contracts, Zod schemas and pure helpers for the Squishy extension, web app and API.",
   "license": "UNLICENSED",
   "private": false,

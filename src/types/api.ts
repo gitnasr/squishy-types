@@ -27,3 +27,28 @@ export interface ApiError {
   /** Present on 426 so the client can tell the user exactly what to update. */
   minProtocolVersion?: number;
 }
+
+/**
+ * The web dashboard.
+ *
+ * Built from the server's mirror using the same `buildCleanupReport` the
+ * extension runs locally, so the two never disagree about how many duplicates
+ * a user has. The extension's copy works offline and signed out; this one works
+ * on any device.
+ */
+export interface DashboardResponse {
+  bookmarks: number;
+  folders: number;
+  maxDepth: number;
+  duplicates: number;
+  emptyFolders: number;
+  singleItemFolders: number;
+  untitled: number;
+  /** The number behind the "fix these" call to action. */
+  issueCount: number;
+  /** Proposals waiting in the review queue. */
+  pendingProposals: number;
+  /** ISO timestamp of the last sync from any device, or null if never. */
+  lastSyncAt: string | null;
+  deviceCount: number;
+}
