@@ -501,6 +501,29 @@ interface RulePassResult {
     /** Everything the rules would only be guessing at. */
     unresolved: ClassifiableBookmark[];
 }
+/**
+ * A group of bookmarks that share a distinctive word.
+ *
+ * Produced without any model: TF-IDF over title and URL path tokens. The
+ * rationale is the point — a user approving a new folder can check "12
+ * bookmarks mention kubernetes" in a way they could never check a cosine score.
+ */
+interface TitleCluster {
+    /** Proposed folder name, title-cased. */
+    name: string;
+    /** The token the group formed around, for the rationale. */
+    token: string;
+    bookmarkIds: string[];
+    confidence: number;
+    rationale: string;
+}
+interface ClusterOptions {
+    /** No folders of two. Defaults to 5, matching the taxonomy guardrail. */
+    minClusterSize?: number;
+    /** Share of a candidate group that must survive after stronger groups claim members. */
+    minCoverage?: number;
+    maxClusters?: number;
+}
 
 /** Regex rather than `z.uuid()` so the schema behaves identically across zod minors. */
 declare const uuidSchema: z.ZodString;
@@ -1032,6 +1055,18 @@ declare function classifyByRule(bookmark: ClassifiableBookmark): Classification 
 declare function runRulePass(bookmarks: ClassifiableBookmark[]): RulePassResult;
 
 /**
+ * Groups bookmarks by their most distinctive shared token.
+ *
+ * Scored by TF-IDF so that a token appearing in nearly everything — the user's
+ * own dominant subject — does not swallow the whole collection into one folder.
+ * Rare-but-shared is what a useful group looks like.
+ *
+ * Each bookmark lands in at most one cluster. A bookmark in three folders is
+ * not a filing system, and the browser cannot represent it anyway.
+ */
+declare function clusterByTitle(bookmarks: ClassifiableBookmark[], options?: ClusterOptions): TitleCluster[];
+
+/**
  * Wire protocol version.
  *
  * Extension users sit on stale builds for weeks, so the version travels in a
@@ -1046,4 +1081,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type Category, type ClassifiableBookmark, type Classification, type ClassificationSource, type CleanupReport, type ClientKind, type ContentState, type DashboardResponse, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type ReviewGroup, type ReviewItem, type ReviewQueueResponse, type RulePassResult, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type Category, type ClassifiableBookmark, type Classification, type ClassificationSource, type CleanupReport, type ClientKind, type ClusterOptions, type ContentState, type DashboardResponse, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type ReviewGroup, type ReviewItem, type ReviewQueueResponse, type RulePassResult, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleCluster, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, clusterByTitle, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };

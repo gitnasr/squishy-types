@@ -52,3 +52,28 @@ export interface RulePassResult {
   /** Everything the rules would only be guessing at. */
   unresolved: ClassifiableBookmark[];
 }
+
+/**
+ * A group of bookmarks that share a distinctive word.
+ *
+ * Produced without any model: TF-IDF over title and URL path tokens. The
+ * rationale is the point — a user approving a new folder can check "12
+ * bookmarks mention kubernetes" in a way they could never check a cosine score.
+ */
+export interface TitleCluster {
+  /** Proposed folder name, title-cased. */
+  name: string;
+  /** The token the group formed around, for the rationale. */
+  token: string;
+  bookmarkIds: string[];
+  confidence: number;
+  rationale: string;
+}
+
+export interface ClusterOptions {
+  /** No folders of two. Defaults to 5, matching the taxonomy guardrail. */
+  minClusterSize?: number;
+  /** Share of a candidate group that must survive after stronger groups claim members. */
+  minCoverage?: number;
+  maxClusters?: number;
+}

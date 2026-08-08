@@ -1117,6 +1117,163 @@ function runRulePass(bookmarks) {
   return { classified, unresolved };
 }
 
-export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+// src/classify/cluster.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  "how",
+  "what",
+  "why",
+  "when",
+  "where",
+  "who",
+  "which",
+  "guide",
+  "tutorial",
+  "introduction",
+  "intro",
+  "getting",
+  "started",
+  "start",
+  "learn",
+  "learning",
+  "best",
+  "top",
+  "ultimate",
+  "complete",
+  "beginners",
+  "beginner",
+  "advanced",
+  "part",
+  "using",
+  "use",
+  "build",
+  "building",
+  "create",
+  "creating",
+  "make",
+  "making",
+  "understand",
+  "understanding",
+  "example",
+  "examples",
+  "tips",
+  "tricks",
+  "guide",
+  "overview",
+  "about",
+  "home",
+  "page",
+  "index",
+  "welcome",
+  "blog",
+  "post",
+  "article",
+  "news",
+  "docs",
+  "doc",
+  "documentation",
+  "reference",
+  "api",
+  "github",
+  "com",
+  "www",
+  "org",
+  "net",
+  "io",
+  "the",
+  "and",
+  "or",
+  "a",
+  "an",
+  "of",
+  "for",
+  "to",
+  "in",
+  "on",
+  "with",
+  "your",
+  "you",
+  "my",
+  "is",
+  "are",
+  "it",
+  "this",
+  "that",
+  "from",
+  "by",
+  "at",
+  "as",
+  "be"
+]);
+var DEFAULTS = {
+  // Spec §6.2: a new category needs at least five members. A folder of two is
+  // the sprawl the cleanup report complains about, so creating one here would
+  // be the product arguing with itself.
+  minClusterSize: 5,
+  // A token has to describe a real share of the group, or the group is a
+  // coincidence rather than a topic.
+  minCoverage: 0.6,
+  maxClusters: 12
+};
+function tokensOf(bookmark) {
+  const parts = parseUrl(bookmark.url);
+  const fromTitle = bookmark.title.toLowerCase().split(/[^a-z0-9+#]+/i).filter(Boolean);
+  const tokens = /* @__PURE__ */ new Set();
+  for (const token of [...fromTitle, ...parts.pathTokens]) {
+    if (token.length < 3 || /^\d+$/.test(token)) continue;
+    if (STOP_WORDS.has(token)) continue;
+    tokens.add(token);
+  }
+  const host = parts.domain.split(".")[0];
+  if (host) tokens.delete(host);
+  return tokens;
+}
+function asFolderName(token) {
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+function clusterByTitle(bookmarks, options = {}) {
+  const settings = { ...DEFAULTS, ...options };
+  if (bookmarks.length < settings.minClusterSize) return [];
+  const tokensById = /* @__PURE__ */ new Map();
+  const documentFrequency = /* @__PURE__ */ new Map();
+  for (const bookmark of bookmarks) {
+    const tokens = tokensOf(bookmark);
+    tokensById.set(bookmark.id, tokens);
+    for (const token of tokens) {
+      documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+    }
+  }
+  const total = bookmarks.length;
+  const candidates = [];
+  for (const [token, frequency] of documentFrequency) {
+    if (frequency < settings.minClusterSize) continue;
+    if (frequency / total > 0.5) continue;
+    const ids = bookmarks.filter((b) => tokensById.get(b.id)?.has(token)).map((b) => b.id);
+    const idf = Math.log(total / frequency);
+    candidates.push({ token, ids, score: ids.length * idf });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  const claimed = /* @__PURE__ */ new Set();
+  const clusters = [];
+  for (const candidate of candidates) {
+    if (clusters.length >= settings.maxClusters) break;
+    const available = candidate.ids.filter((id) => !claimed.has(id));
+    if (available.length < settings.minClusterSize) continue;
+    if (available.length / candidate.ids.length < settings.minCoverage) continue;
+    for (const id of available) claimed.add(id);
+    clusters.push({
+      name: asFolderName(candidate.token),
+      token: candidate.token,
+      bookmarkIds: available,
+      // Deliberately capped below the rule pass's floor: a shared word is
+      // weaker evidence than a known domain, and the review queue sorts by
+      // confidence so these should be read first.
+      confidence: Math.min(0.75, 0.4 + available.length / (total * 2)),
+      rationale: `${available.length} bookmarks mention "${candidate.token}"`
+    });
+  }
+  return clusters;
+}
+
+export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, clusterByTitle, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map
