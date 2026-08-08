@@ -52,3 +52,43 @@ export interface ProposalDecisionResponse {
   rejected: number;
   planIds: Uuid[];
 }
+
+/**
+ * The review queue, shaped for display.
+ *
+ * `Proposal` alone cannot render a diff — it has counts, not the bookmark
+ * titles or destinations a user needs to judge the change. This is the read
+ * model for that screen, assembled server-side so the client makes one request
+ * rather than N+1.
+ */
+export interface ReviewItem {
+  proposalId: Uuid;
+  bookmarkId: Uuid;
+  title: string;
+  url: string;
+  /** Where it lives now. `null` means loose at the top level. */
+  currentFolder: string | null;
+  /** Where the proposal would put it. */
+  targetCategory: string;
+  confidence: number;
+  rationale: string;
+}
+
+/**
+ * Proposals grouped by destination, not by bookmark.
+ *
+ * Grouping is what makes bulk approval possible: a user judges "these 40 belong
+ * in Development" once, rather than answering the same question 40 times.
+ */
+export interface ReviewGroup {
+  kind: ProposalKind;
+  targetCategory: string;
+  /** Mean confidence across the group, for sorting the shakiest to the top. */
+  confidence: number;
+  items: ReviewItem[];
+}
+
+export interface ReviewQueueResponse {
+  groups: ReviewGroup[];
+  total: number;
+}

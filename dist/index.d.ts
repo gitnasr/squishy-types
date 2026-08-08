@@ -228,6 +228,43 @@ interface ProposalDecisionResponse {
     rejected: number;
     planIds: Uuid[];
 }
+/**
+ * The review queue, shaped for display.
+ *
+ * `Proposal` alone cannot render a diff — it has counts, not the bookmark
+ * titles or destinations a user needs to judge the change. This is the read
+ * model for that screen, assembled server-side so the client makes one request
+ * rather than N+1.
+ */
+interface ReviewItem {
+    proposalId: Uuid;
+    bookmarkId: Uuid;
+    title: string;
+    url: string;
+    /** Where it lives now. `null` means loose at the top level. */
+    currentFolder: string | null;
+    /** Where the proposal would put it. */
+    targetCategory: string;
+    confidence: number;
+    rationale: string;
+}
+/**
+ * Proposals grouped by destination, not by bookmark.
+ *
+ * Grouping is what makes bulk approval possible: a user judges "these 40 belong
+ * in Development" once, rather than answering the same question 40 times.
+ */
+interface ReviewGroup {
+    kind: ProposalKind;
+    targetCategory: string;
+    /** Mean confidence across the group, for sorting the shakiest to the top. */
+    confidence: number;
+    items: ReviewItem[];
+}
+interface ReviewQueueResponse {
+    groups: ReviewGroup[];
+    total: number;
+}
 
 /** One `chrome.history` datum. Optional — the permission is requested in-context, not at install. */
 interface HistoryStat {
@@ -985,4 +1022,4 @@ declare const PROTOCOL_HEADER = "x-squishy-protocol";
 declare const CLIENT_HEADER = "x-squishy-client";
 declare function isProtocolSupported(version: number): boolean;
 
-export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type Category, type ClassifiableBookmark, type Classification, type ClassificationSource, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type RulePassResult, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { type ApiError, type AppliedChange, type Bookmark, type BookmarkStatus, type BrowserNode, CLIENT_HEADER, type Category, type ClassifiableBookmark, type Classification, type ClassificationSource, type CleanupReport, type ClientKind, type ContentState, type DuplicateGroup, type EpochMs, type FlatNode, type Folder, type FolderOrigin, type FolderSummary, type HistoryStat, IMPORT_BATCH_SIZE, type IsoDateTime, type KeySource, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, type MeResponse, type MutationOp, type MutationOpKind, type MutationOpResult, type MutationPlan, type MutationPlanAck, PROTOCOL_HEADER, PROTOCOL_VERSION, type Paginated, type Plan, type Proposal, type ProposalBulkApproveRequest, type ProposalDecisionResponse, type ProposalItem, type ProposalItemOp, type ProposalKind, type ProposalStatus, type QuotaState, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, type ReportAge, type ReportDuplicates, type ReportEngagement, type ReportFolders, type ReportInput, type ReportNaming, type ReportTotals, type ReviewGroup, type ReviewItem, type ReviewQueueResponse, type RulePassResult, type SimilarFolderGroup, type SyncChange, type SyncChangesRequest, type SyncChangesResponse, type SyncDiffResponse, type SyncImportRequest, type SyncImportResponse, type SyncOpKind, type SyncRejection, type TelemetryBatch, type TelemetryClient, type TelemetryEvent, type TelemetryEventName, type TelemetryIngestResponse, type TelemetryLabel, type TelemetryMeasure, type TitleSample, type UrlParts, type Uuid, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
