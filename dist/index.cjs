@@ -120,6 +120,8 @@ var quotaStateSchema = zod.z.object({
   keySource: keySourceSchema
 });
 var meResponseSchema = zod.z.object({
+  /** Served rather than compiled in — see MeResponse. */
+  webAppUrl: zod.z.string().url(),
   userId: uuidSchema,
   email: zod.z.string().email(),
   displayName: zod.z.string().nullable(),

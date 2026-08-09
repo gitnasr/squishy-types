@@ -11,6 +11,15 @@ export interface QuotaState {
 }
 
 export interface MeResponse {
+  /**
+   * Where the web app lives, told to clients rather than compiled into them.
+   *
+   * The extension needs this to send someone to the review queue. Baking it in
+   * at build time meant a forgotten env var silently pointed users at
+   * localhost — and changing the domain would have required shipping a new
+   * extension through Web Store review.
+   */
+  webAppUrl: string;
   userId: Uuid;
   email: string;
   displayName: string | null;

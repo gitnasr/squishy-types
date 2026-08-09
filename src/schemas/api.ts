@@ -10,6 +10,8 @@ export const quotaStateSchema = z.object({
 });
 
 export const meResponseSchema = z.object({
+  /** Served rather than compiled in — see MeResponse. */
+  webAppUrl: z.string().url(),
   userId: uuidSchema,
   email: z.string().email(),
   displayName: z.string().nullable(),
