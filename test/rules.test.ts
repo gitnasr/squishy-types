@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { RULE_CONFIDENCE_FLOOR, classifyByRule, runRulePass } from '../src/classify/rules.js';
+import {
+  RULE_CONFIDENCE_FLOOR,
+  classifyByRule,
+  hasUsableSignal,
+  runRulePass,
+} from '../src/classify/rules.js';
 import type { ClassifiableBookmark } from '../src/types/index.js';
 
 /**
@@ -81,6 +86,23 @@ describe('classifyByRule', () => {
     expect(docs?.confidence).toBeGreaterThanOrEqual(RULE_CONFIDENCE_FLOOR);
   });
 
+  /**
+   * A product page is shopping whatever the product is.
+   *
+   * Two DJI gimbals from the manufacturer's own store were filed under "Tools
+   * & Utilities" by the model, which judged the object instead of the page.
+   * Someone on store.dji.com is shopping.
+   */
+  it('reads storefront subdomains and product paths as shopping', () => {
+    expect(classifyByRule(at('https://store.dji.com/product/osmo-mobile-8p'))?.category).toBe(
+      'Shopping',
+    );
+    expect(classifyByRule(at('https://shop.example.test/anything'))?.category).toBe('Shopping');
+    expect(classifyByRule(at('https://some-brand.test/products/kettle'))?.category).toBe('Shopping');
+    // Not every host beginning with those letters — a label boundary, as ever.
+    expect(classifyByRule(at('https://storefront-blog.test/a'))).toBeNull();
+  });
+
   it('declines rather than guessing on an unknown site', () => {
     expect(classifyByRule(at('https://some-random-blog.test/a/thing'))).toBeNull();
   });
@@ -98,6 +120,43 @@ describe('classifyByRule', () => {
     expect(match!.confidence).toBeLessThan(1);
     expect(match!.source).toBe('rule');
     expect(match!.rationale.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The guard that stops the LLM being paid to flip a coin.
+ *
+ * In production a bare `youtube.com` with no title came back as "Entertainment"
+ * at 0.9 confidence, and bare reddit.com and twitter.com as "Social & Community"
+ * on the same absence of evidence. The rule pass had already declined all three
+ * for exactly the right reason; the model was simply never told it was allowed
+ * to decline too.
+ */
+describe('hasUsableSignal', () => {
+  it('rejects a bare host with no title', () => {
+    expect(hasUsableSignal(at('https://www.youtube.com/', ''))).toBe(false);
+    expect(hasUsableSignal(at('https://reddit.com/', 'Untitled'))).toBe(false);
+    expect(hasUsableSignal(at('https://twitter.com/', 'New Tab'))).toBe(false);
+  });
+
+  it('rejects a title that only repeats the host', () => {
+    expect(hasUsableSignal(at('https://muenchen.de/', 'muenchen.de'))).toBe(false);
+  });
+
+  it('accepts a real title even on a bare host', () => {
+    expect(hasUsableSignal(at('https://youtube.com/', 'LangGraph Complete Course'))).toBe(true);
+  });
+
+  it('accepts a path worth reading even with no title', () => {
+    expect(hasUsableSignal(at('https://youtube.com/playlist?list=kubernetes-deep-dive', ''))).toBe(
+      true,
+    );
+    expect(hasUsableSignal(at('https://example.test/kubernetes/operators', ''))).toBe(true);
+  });
+
+  it('rejects anything that is not a URL at all', () => {
+    expect(hasUsableSignal(at('not a url', 'whatever'))).toBe(false);
+    expect(hasUsableSignal(at('', ''))).toBe(false);
   });
 });
 

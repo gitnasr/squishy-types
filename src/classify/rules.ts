@@ -221,6 +221,23 @@ const PATH_RULES: [RegExp, Category, string][] = [
   [/^\/(blog|posts?|articles?)(\/|$)/, 'News & Articles', 'an article path'],
   [/^\/(jobs?|careers?)(\/|$)/, 'Career & Jobs', 'a careers path'],
   [/^\/(pricing|checkout|cart)(\/|$)/, 'Shopping', 'a commerce path'],
+  // A product page is shopping whatever the product is. The LLM filed two
+  // camera gimbals from a manufacturer's store under "Tools & Utilities"
+  // because it judged the object rather than the page: someone bookmarking
+  // store.dji.com/product/… is shopping, not reading a manual.
+  [/^\/(products?|dp|itm|sku)(\/|$)/, 'Shopping', 'a product page'],
+];
+
+/**
+ * Subdomains that announce what the page is for.
+ *
+ * `store.` and `shop.` are the whole reason those hosts exist, on any brand and
+ * in any language — which makes this one of the few shape rules that generalises
+ * without a lookup table.
+ */
+const HOST_PREFIX_RULES: [string, Category, string][] = [
+  ['store.', 'Shopping', 'a storefront'],
+  ['shop.', 'Shopping', 'a storefront'],
 ];
 
 function matchDomain(host: string): Category | null {
@@ -266,6 +283,17 @@ export function classifyByRule(bookmark: ClassifiableBookmark): Classification |
     };
   }
 
+  for (const [prefix, category, why] of HOST_PREFIX_RULES) {
+    if (parts.host.startsWith(prefix)) {
+      return {
+        category,
+        confidence: RULE_CONFIDENCE_PATH,
+        source: 'rule',
+        rationale: `${parts.host} is ${why}`,
+      };
+    }
+  }
+
   let pathname = '';
   try {
     pathname = new URL(parts.canonical).pathname;
@@ -285,6 +313,47 @@ export function classifyByRule(bookmark: ClassifiableBookmark): Classification |
   }
 
   return null;
+}
+
+/** Titles that carry no more information than no title at all. */
+const EMPTY_TITLES = new Set(['', 'untitled', 'new tab', 'no title', 'home', 'index']);
+
+/**
+ * Is there anything here to read?
+ *
+ * A bookmark saved as a bare `https://youtube.com/` with no title gives a
+ * language model exactly what it gave the rule pass: a host known to serve
+ * every subject there is. The rules decline that honestly. The model did not —
+ * it filed it as "Entertainment" at 0.9 confidence, and the same run put a bare
+ * reddit.com and twitter.com into "Social & Community" on the same non-evidence.
+ *
+ * That is the worst failure available: it costs money, it looks authoritative,
+ * and it is a coin flip. Anything without a usable title or a path worth
+ * tokenising is skipped before the call is made — cheaper and more honest than
+ * paying for a guess and hoping the confidence filter catches it.
+ */
+export function hasUsableSignal(bookmark: ClassifiableBookmark): boolean {
+  const parts = parseUrl(bookmark.url);
+  if (parts.host === '') return false;
+
+  const title = bookmark.title.trim().toLowerCase();
+  // A title that merely repeats the host is not a title.
+  if (!EMPTY_TITLES.has(title) && title !== parts.host && title !== parts.domain) return true;
+
+  let pathname = '';
+  let search = '';
+  try {
+    const url = new URL(parts.canonical);
+    pathname = url.pathname;
+    search = url.search;
+  } catch {
+    return false;
+  }
+
+  // A bare host, or a path of nothing but slashes, leaves the model reading the
+  // domain — which is precisely what the ambiguity list already refused to do.
+  const words = `${pathname} ${search}`.split(/[^a-z0-9]+/i).filter((w) => w.length > 2);
+  return words.length > 0;
 }
 
 /**

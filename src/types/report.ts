@@ -110,6 +110,12 @@ export interface CleanupReport {
   naming: ReportNaming;
   age: ReportAge;
   engagement: ReportEngagement;
-  /** The number behind the "Fix N issues" CTA. */
+  /** Everything worth telling the user about. A diagnosis, not a promise. */
   issueCount: number;
+  /**
+   * The subset any pass can actually act on: duplicates, untidy folders, and
+   * loose bookmarks. This is what the CTA is allowed to count — `issueCount`
+   * includes findings (vague names, deep nesting) that nothing yet fixes.
+   */
+  fixable: number;
 }

@@ -247,6 +247,25 @@ export function buildCleanupReport(input: ReportInput): CleanupReport {
     untitled +
     vague;
 
+  const topLevelBookmarks = bookmarks.filter((node) => node.depth <= 1).length;
+
+  /**
+   * What the product can actually do something about.
+   *
+   * `issueCount` is a diagnosis and counts everything worth knowing — including
+   * vague names, deep nesting and near-identical folder names, none of which any
+   * pass can currently fix. Wiring the "Fix N issues" button to it promised
+   * eight fixes and delivered none, because seven of the eight were badly-named
+   * bookmarks and nothing in the pipeline renames anything.
+   *
+   * A button must never name a number larger than the work behind it. This is
+   * that number: duplicates to remove, folders to tidy, and loose bookmarks to
+   * file. Categorisation may still decline on some of the loose ones, so the
+   * outcome is reported honestly afterwards — but the promise is at least the
+   * right shape.
+   */
+  const fixable = wastedEntries + empty.length + singleItem.length + topLevelBookmarks;
+
   return {
     generatedAt: now,
     protocolVersion: PROTOCOL_VERSION,
@@ -254,7 +273,7 @@ export function buildCleanupReport(input: ReportInput): CleanupReport {
       bookmarks: bookmarks.length,
       folders: folderNodes.length,
       maxDepth: nodes.reduce((max, node) => Math.max(max, node.depth), 0),
-      topLevelBookmarks: bookmarks.filter((node) => node.depth <= 1).length,
+      topLevelBookmarks,
       averageFolderSize: folderNodes.length === 0 ? 0 : bookmarks.length / folderNodes.length,
     },
     duplicates: {
@@ -283,5 +302,6 @@ export function buildCleanupReport(input: ReportInput): CleanupReport {
     },
     engagement: { historyAvailable, neverRevisited, notVisitedIn1Year },
     issueCount,
+    fixable,
   };
 }

@@ -858,6 +858,8 @@ function buildCleanupReport(input) {
   }
   const similarNameSurplus = similarNames.reduce((sum, group) => sum + group.folders.length - 1, 0);
   const issueCount = wastedEntries + empty.length + singleItem.length + deeplyNested.length + similarNameSurplus + untitled + vague;
+  const topLevelBookmarks = bookmarks.filter((node) => node.depth <= 1).length;
+  const fixable = wastedEntries + empty.length + singleItem.length + topLevelBookmarks;
   return {
     generatedAt: now,
     protocolVersion: PROTOCOL_VERSION,
@@ -865,7 +867,7 @@ function buildCleanupReport(input) {
       bookmarks: bookmarks.length,
       folders: folderNodes.length,
       maxDepth: nodes.reduce((max, node) => Math.max(max, node.depth), 0),
-      topLevelBookmarks: bookmarks.filter((node) => node.depth <= 1).length,
+      topLevelBookmarks,
       averageFolderSize: folderNodes.length === 0 ? 0 : bookmarks.length / folderNodes.length
     },
     duplicates: {
@@ -893,7 +895,8 @@ function buildCleanupReport(input) {
       undated
     },
     engagement: { historyAvailable, neverRevisited, notVisitedIn1Year },
-    issueCount
+    issueCount,
+    fixable
   };
 }
 
@@ -1064,7 +1067,16 @@ var PATH_RULES = [
   [/^\/(docs|documentation|reference|api)(\/|$)/, "Documentation & Reference", "a docs path"],
   [/^\/(blog|posts?|articles?)(\/|$)/, "News & Articles", "an article path"],
   [/^\/(jobs?|careers?)(\/|$)/, "Career & Jobs", "a careers path"],
-  [/^\/(pricing|checkout|cart)(\/|$)/, "Shopping", "a commerce path"]
+  [/^\/(pricing|checkout|cart)(\/|$)/, "Shopping", "a commerce path"],
+  // A product page is shopping whatever the product is. The LLM filed two
+  // camera gimbals from a manufacturer's store under "Tools & Utilities"
+  // because it judged the object rather than the page: someone bookmarking
+  // store.dji.com/product/… is shopping, not reading a manual.
+  [/^\/(products?|dp|itm|sku)(\/|$)/, "Shopping", "a product page"]
+];
+var HOST_PREFIX_RULES = [
+  ["store.", "Shopping", "a storefront"],
+  ["shop.", "Shopping", "a storefront"]
 ];
 function matchDomain(host) {
   for (const [domain, category] of DOMAIN_RULES) {
@@ -1092,6 +1104,16 @@ function classifyByRule(bookmark) {
       rationale: `${host} is a ${byDomain.toLowerCase()} site`
     };
   }
+  for (const [prefix, category, why] of HOST_PREFIX_RULES) {
+    if (parts.host.startsWith(prefix)) {
+      return {
+        category,
+        confidence: RULE_CONFIDENCE_PATH,
+        source: "rule",
+        rationale: `${parts.host} is ${why}`
+      };
+    }
+  }
   let pathname = "";
   try {
     pathname = new URL(parts.canonical).pathname;
@@ -1109,6 +1131,24 @@ function classifyByRule(bookmark) {
     }
   }
   return null;
+}
+var EMPTY_TITLES = /* @__PURE__ */ new Set(["", "untitled", "new tab", "no title", "home", "index"]);
+function hasUsableSignal(bookmark) {
+  const parts = parseUrl(bookmark.url);
+  if (parts.host === "") return false;
+  const title = bookmark.title.trim().toLowerCase();
+  if (!EMPTY_TITLES.has(title) && title !== parts.host && title !== parts.domain) return true;
+  let pathname = "";
+  let search = "";
+  try {
+    const url = new URL(parts.canonical);
+    pathname = url.pathname;
+    search = url.search;
+  } catch {
+    return false;
+  }
+  const words = `${pathname} ${search}`.split(/[^a-z0-9]+/i).filter((w) => w.length > 2);
+  return words.length > 0;
 }
 function runRulePass(bookmarks) {
   const classified = [];
@@ -1281,6 +1321,6 @@ function clusterByTitle(bookmarks, options = {}) {
   return clusters;
 }
 
-export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, clusterByTitle, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
+export { CLIENT_HEADER, IMPORT_BATCH_SIZE, MAX_CHANGES_PER_FLUSH, MAX_MANIFEST_IDS, MAX_TELEMETRY_EVENTS, MIN_SUPPORTED_PROTOCOL, PROTOCOL_HEADER, PROTOCOL_VERSION, RULE_CONFIDENCE_DOMAIN, RULE_CONFIDENCE_FLOOR, RULE_CONFIDENCE_PATH, apiErrorSchema, bookmarkStatusSchema, buildCleanupReport, canonicalizeUrl, classifyByRule, clientKindSchema, clusterByTitle, contentStateSchema, editDistance, epochMsSchema, flatNodeSchema, flattenTree, folderOriginSchema, hasUsableSignal, isProtocolSupported, isUntitled, isVagueTitle, isoDateTimeSchema, jsonObjectSchema, keySourceSchema, meResponseSchema, mutationOpKindSchema, mutationOpResultSchema, mutationOpSchema, mutationPlanAckSchema, mutationPlanSchema, normalizeFolderName, parseUrl, pathTokens, planSchema, proposalBulkApproveRequestSchema, proposalDecisionResponseSchema, proposalItemOpSchema, proposalItemSchema, proposalKindSchema, proposalSchema, proposalStatusSchema, quotaStateSchema, runRulePass, sha256Hex, stripSubdomain, syncChangeSchema, syncChangesRequestSchema, syncChangesResponseSchema, syncDiffResponseSchema, syncImportRequestSchema, syncImportResponseSchema, syncOpKindSchema, syncRejectionSchema, telemetryBatchSchema, telemetryClientSchema, telemetryEventNameSchema, telemetryEventNames, telemetryEventSchema, telemetryIngestResponseSchema, telemetryLabelValues, telemetryMeasures, titleEqualsUrl, treeHash, treeSize, urlHash, uuidSchema };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

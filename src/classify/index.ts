@@ -1,5 +1,6 @@
 export {
   classifyByRule,
+  hasUsableSignal,
   runRulePass,
   RULE_CONFIDENCE_DOMAIN,
   RULE_CONFIDENCE_PATH,
