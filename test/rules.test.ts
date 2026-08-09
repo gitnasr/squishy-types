@@ -41,7 +41,7 @@ describe('classifyByRule', () => {
     // The rules read the canonical host, so `www.`, `m.` and http are already
     // handled — the same normalisation the API dedupes with.
     expect(classifyByRule(at('http://www.github.com/a/b'))?.category).toBe('Development');
-    expect(classifyByRule(at('https://m.youtube.com/watch?v=x'))?.category).toBe('Entertainment');
+    expect(classifyByRule(at('https://m.leetcode.com/problems/x'))?.category).toBe('Development');
   });
 
   /**
@@ -53,6 +53,11 @@ describe('classifyByRule', () => {
    */
   it('declines on domains that host too many kinds of thing', () => {
     for (const url of [
+      // Platforms, not subjects: a LangGraph course and a music video are both
+      // youtube.com. Filing by host put a machine-learning tutorial in
+      // "Entertainment" for a real user.
+      'https://youtube.com/watch?v=abc',
+      'https://reddit.com/r/StableDiffusion/comments/x',
       'https://medium.com/@someone/a-post',
       'https://dev.to/someone/a-post',
       'https://en.wikipedia.org/wiki/Bookmark',

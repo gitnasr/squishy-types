@@ -134,17 +134,12 @@ const DOMAIN_RULES: [string, Category][] = [
   ['arstechnica.com', 'News & Articles'],
 
   // Social & Community
-  ['reddit.com', 'Social & Community'],
-  ['x.com', 'Social & Community'],
-  ['twitter.com', 'Social & Community'],
   ['facebook.com', 'Social & Community'],
   ['instagram.com', 'Social & Community'],
   ['discord.com', 'Social & Community'],
   ['mastodon.social', 'Social & Community'],
 
   // Entertainment
-  ['youtube.com', 'Entertainment'],
-  ['youtu.be', 'Entertainment'],
   ['netflix.com', 'Entertainment'],
   ['twitch.tv', 'Entertainment'],
   ['spotify.com', 'Entertainment'],
@@ -188,6 +183,16 @@ const DOMAIN_RULES: [string, Category][] = [
  * silently and confidently. They go to the LLM, which can read the title.
  */
 const AMBIGUOUS_DOMAINS = new Set([
+  // Platforms, not subjects. A LangGraph course and a music video are both
+  // youtube.com; r/StableDiffusion and r/cooking are both reddit.com. Filing
+  // by host puts a machine-learning tutorial in "Entertainment", which is not
+  // a small inaccuracy — it is the product actively making someone's
+  // bookmarks worse, confidently, in bulk.
+  'youtube.com',
+  'youtu.be',
+  'reddit.com',
+  'x.com',
+  'twitter.com',
   'medium.com',
   'substack.com',
   'dev.to',
