@@ -105,4 +105,11 @@ export interface UndoableChange {
   appliedAt: IsoDateTime;
   /** How many browser operations reversing it would perform. */
   ops: number;
+  /**
+   * What the batch actually did, in words.
+   *
+   * "2 changes" tells a user nothing about whether they want it back. This is
+   * the difference between a log line and something someone can act on.
+   */
+  summary: string;
 }
